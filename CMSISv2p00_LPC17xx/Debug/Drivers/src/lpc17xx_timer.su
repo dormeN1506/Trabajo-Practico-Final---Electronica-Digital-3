@@ -1,0 +1,17 @@
+../Drivers/src/lpc17xx_timer.c:176:6:TIM_DeInit	16	static
+../Drivers/src/lpc17xx_timer.c:192:6:TIM_Enable	8	static
+../Drivers/src/lpc17xx_timer.c:198:6:TIM_Disable	8	static
+../Drivers/src/lpc17xx_timer.c:204:10:TIM_ReadTimer	8	static
+../Drivers/src/lpc17xx_timer.c:210:10:TIM_ReadPrescale	8	static
+../Drivers/src/lpc17xx_timer.c:216:6:TIM_ResetCounter	8	static
+../Drivers/src/lpc17xx_timer.c:123:13:TIM_Init	8	static
+../Drivers/src/lpc17xx_timer.c:147:6:TIM_InitTimer	16	static
+../Drivers/src/lpc17xx_timer.c:166:6:TIM_InitCounter	16	static
+../Drivers/src/lpc17xx_timer.c:242:6:TIM_UpdateMatchValue	16	static
+../Drivers/src/lpc17xx_timer.c:252:6:TIM_SetMatchExt	16	static
+../Drivers/src/lpc17xx_timer.c:223:6:TIM_ConfigMatch	16	static
+../Drivers/src/lpc17xx_timer.c:261:6:TIM_ConfigCapture	16	static
+../Drivers/src/lpc17xx_timer.c:275:10:TIM_GetCaptureValue	16	static
+../Drivers/src/lpc17xx_timer.c:283:6:TIM_ClearIntPending	16	static
+../Drivers/src/lpc17xx_timer.c:290:12:TIM_GetIntStatus	16	static
+../Drivers/src/lpc17xx_timer.c:297:6:TIM_PinConfig	8	static

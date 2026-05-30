@@ -1,0 +1,4 @@
+../Drivers/src/lpc17xx_pinsel.c:102:6:PINSEL_ConfigPin	24	static
+../Drivers/src/lpc17xx_pinsel.c:114:6:PINSEL_ConfigMultiplePins	32	static
+../Drivers/src/lpc17xx_pinsel.c:127:6:PINSEL_ConfigTraceFunc	8	static
+../Drivers/src/lpc17xx_pinsel.c:137:6:PINSEL_SetI2CPins	16	static

@@ -1,0 +1,7 @@
+../Drivers/src/lpc17xx_exti.c:87:6:EXTI_Init	0	static
+../Drivers/src/lpc17xx_exti.c:97:6:EXTI_PinConfig	16	static
+../Drivers/src/lpc17xx_exti.c:115:6:EXTI_Config	16	static
+../Drivers/src/lpc17xx_exti.c:135:6:EXTI_ClearFlag	8	static
+../Drivers/src/lpc17xx_exti.c:141:12:EXTI_GetFlag	8	static
+../Drivers/src/lpc17xx_exti.c:147:6:EXTI_EnableIRQ	8	static
+../Drivers/src/lpc17xx_exti.c:126:6:EXTI_ConfigEnable	8	static
