@@ -8,7 +8,10 @@
 #include "lpc17xx_gpdma.h"
 #include "lpc17xx_dac.h"
 
-//LDRs
+#define BANCO_1_SRAM 0x2007C000
+
+//define LDRs y adc
+#define N_MUESTRAS   16 //nuemero de muestras para el transfersize del DMA, se promedia cada n muestras para obtener un valor mas estable
 
 #define LDR_ARRIBA_IZQ_PORT     0
 #define LDR_ARRIBA_IZQ_PIN      23    // Pin físico P0.23 -> Función AD0.0
@@ -53,5 +56,19 @@
 
 //declarar funciones
 void trackerInit(void);
+void config_ADC(void);
+void config_DMA(void);
 
 //delcarar variables globales
+//variables para adc
+// Valores raws de los LDRs leídos por el ADC 
+volatile uint16_t ldr0_raw_buffer_A[16]; 
+volatile uint16_t ldr0_raw_buffer_B[16]; 
+
+
+//LLI como usamos 2 por canal de dma usamos 2 arrays
+GPDMA_LLI_T lli1[4];
+GPDMA_LLI_T lli2[4];
+
+// Buffer con los valores limpios y promediados listos para usar
+uint16_t ldr_procesados[4];

@@ -5,6 +5,8 @@
 
 int main(void) {
     
+    config_ADC();
+    config_DMA();
     while (1) {
        
     }
