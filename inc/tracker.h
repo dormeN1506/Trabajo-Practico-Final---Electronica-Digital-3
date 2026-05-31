@@ -26,8 +26,8 @@
 #define LDR_ABAJO_IZQ_CH        2     // Canal 2 del ADC
 
 #define LDR_ABAJO_DER_PORT      0
-#define LDR_ABAJO_DER_PIN       26    // Pin físico P0.26 -> Función AD0.3
-#define LDR_ABAJO_DER_CH        3     // Canal 3 del ADC
+#define LDR_ABAJO_DER_PIN       3    // Pin físico P0.3 -> Función AD0.6
+#define LDR_ABAJO_DER_CH        6     // Canal 6 del ADC
 
 //Mascara para LDRs va para configurar el ADC en modo Burst con los 4 canales de LDRs
 #define ADC_BURST_CHANNELS      ((1 << LDR_ARRIBA_IZQ_CH) | (1 << LDR_ARRIBA_DER_CH) | \
@@ -62,13 +62,26 @@ void config_DMA(void);
 //delcarar variables globales
 //variables para adc
 // Valores raws de los LDRs leídos por el ADC 
+//buffer ldr0
 volatile uint16_t ldr0_raw_buffer_A[16]; 
 volatile uint16_t ldr0_raw_buffer_B[16]; 
+//buffer ldr1
+volatile uint16_t ldr1_raw_buffer_A[16]; 
+volatile uint16_t ldr1_raw_buffer_B[16]; 
+//buffer ldr2
+volatile uint16_t ldr2_raw_buffer_A[16]; 
+volatile uint16_t ldr2_raw_buffer_B[16]; 
+//buffer ldr3
+volatile uint16_t ldr3_raw_buffer_A[16]; 
+volatile uint16_t ldr3_raw_buffer_B[16]; 
 
 
 //LLI como usamos 2 por canal de dma usamos 2 arrays
 GPDMA_LLI_T lli1[4];
 GPDMA_LLI_T lli2[4];
+
+
+
 
 // Buffer con los valores limpios y promediados listos para usar
 uint16_t ldr_procesados[4];
