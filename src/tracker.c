@@ -4,6 +4,13 @@
 
 //ADC
 
+//-----------BORRAR DESPUES DE MERGEAR LA OTRA RAMA----------------
+volatile uint32_t promedio_LDR_ARR_IZQ = 0;
+volatile uint32_t promedio_LDR_ARR_DER = 0; //Variables para ir guardando los promedios de los valores tomados por cada
+volatile uint32_t promedio_LDR_ABJ_IZQ = 0; //LDR usado
+volatile uint32_t promedio_LDR_ABJ_DER = 0;
+//---------------------------------------------------------------------------
+
 void config_ADC(void) {
     ADC_Init( 200000); 
     ADC_PinConfig(ADC_CHANNEL_0);
@@ -82,8 +89,16 @@ void TIMER0_IRQHandler(void)
                                 suma += matriz_datos_adc[canal][muestra];
                             }
                             datos_adc[canal] = suma / 16; //guardo el valor promediado de cada canal
+
                         }
-                }
+                        
+                        promedio_LDR_ARR_IZQ = datos_adc[0]; //LDR Arriba Izquierdo
+                        promedio_LDR_ARR_DER = datos_adc[1]; //LDR Arriba Derecho
+                        promedio_LDR_ABJ_IZQ = datos_adc[2]; //LDR Abajo Izquierdo
+                        promedio_LDR_ABJ_DER = datos_adc[3]; //LDR Abajo Derecho
+
+                        //  agregar código PARA enviar telemetría.
+                }       
 
                 maquina_estado_adc = CONVERTIR_ADC0;
                 break;
@@ -93,6 +108,115 @@ void TIMER0_IRQHandler(void)
 
 
 
-void DMA_IRQHandler(void) {
+
+//-----------------implementacion uart--------------------
+
+#define UART_BUF_SIZE 64
+
+// Buffers circulares de software para RX
+volatile uint8_t rx_buffer[UART_BUF_SIZE];
+volatile uint16_t rx_head = 0;
+volatile uint16_t rx_tail = 0;
+
+// Variables de estado de tu proyecto
+volatile uint8_t modo_automatico = 1;
+
+void config_UART(void) {
+    UART_CFG_T uartCfg;
+    UART_FIFO_CFG_T FioCfg;
+
+    // 1. Configurar Pines nativos usando la tabla estática del driver
+    UART_PinConfig(0); // Configura TX0 en P0.2
+    UART_PinConfig(1); // Configura RX0 en P0.3
+
+    // 2. Parámetros de comunicación: 9600 baudios, 8 bits de datos, sin paridad, 1 bit de parada
+    uartCfg.baudRate = 9600;
+    uartCfg.dataBits = UART_DBITS_8;
+    uartCfg.parity   = UART_PARITY_NONE;
+    uartCfg.stopBits = UART_STOPBIT_1;
     
+    // Inicializa el periférico y calcula divisores de clock automáticamente
+    UART_Init(LPC_UART0, &uartCfg);
+
+    // 3. Configurar FIFOs de hardware (Trig Level 0 = interrumpe por cada 1 byte recibido)
+    FioCfg.level      = UART_FIFO_TRGLEV0;
+    FioCfg.resetRxBuf = ENABLE;
+    FioCfg.resetTxBuf = ENABLE;
+    FioCfg.dmaMode    = DISABLE;
+    UART_FIFOConfig(LPC_UART0, &FioCfg);
+
+    // 4. Habilitar interrupción por Recepción de Datos (RBR) en el periférico
+    UART_IntConfig(LPC_UART0, UART_INT_RBR, ENABLE);
+    
+    // 5. Habilitar la interrupción en el NVIC
+    NVIC_EnableIRQ(UART0_IRQn);
+    
+    // 6. Habilitar la transmisión en la UART (Line Control)
+    UART_TxEnable(LPC_UART0);
+}
+
+void UART0_IRQHandler(void) {
+    // Leer el Identificador de Interrupción (IIR)
+    uint32_t intsrc = UART_GetIntId(LPC_UART0);
+    
+    // Filtrar la causa de la interrupción. Buscamos UART_IID_RDA (Receive Data Available)
+    if ((intsrc & 0x0E) == 0x04) { 
+        
+        uint8_t byte_recibido = UART_ReceiveByte(LPC_UART0); //
+        
+        // Insertar en el buffer circular de software
+        uint16_t next_head = (rx_head + 1) % UART_BUF_SIZE;
+        if (next_head != rx_tail) { 
+            rx_buffer[rx_head] = byte_recibido;
+            rx_head = next_head;
+        }
+    }
+}
+
+void UART_EnviarString(const char *str) {
+    // UART_Send se encarga de recorrer el buffer e ir llenando la FIFO de hardware
+    UART_Send(LPC_UART0, (const uint8_t *)str, strlen(str), BLOCKING);
+}
+
+void revisar_comandos_uart(void) {
+    // Mientras haya bytes sin procesar en el buffer circular que llenó la ISR
+    while (rx_head != rx_tail) {
+        
+        // Extraemos un solo carácter del buffer
+        uint8_t comando = rx_buffer[rx_tail];
+        rx_tail = (rx_tail + 1) % UART_BUF_SIZE; // Avanzamos la cola
+        
+        // Evaluamos directamente el carácter con un switch
+        switch (comando) {
+            
+            case 'M': // Si llega la letra 'M' (Mayúscula)
+            case 'm': // O si llega la letra 'm' (Minúscula)
+                modo_automatico = 0; // Desactivar el seguidor solar automático
+                UART_EnviarString("ACK: Modo Manual\r\n");
+                break;
+                
+            case 'A':
+            case 'a':
+                modo_automatico = 1; // Activar el seguidor solar automático
+                UART_EnviarString("ACK: Modo Auto\r\n");
+                break;
+                
+            case 'S':
+            case 's':
+                UART_EnviarString("ACK: Enviando Estado...\r\n");
+                break;
+
+            // ─── FILTRO CRÍTICO PARA ENTER / FIN DE LÍNEA ───
+            case '\r': // Retorno de carro (Carriage Return)
+            case '\n': // Salto de línea (Line Feed)
+                // Si llegan estos caracteres, hacemos un break directo. 
+                // Los ignoramos en silencio para que no caigan en 'default'.
+                break;
+
+            default:
+                // Si mandan cualquier otra letra que no reconoce el sistema
+                UART_EnviarString("ERROR: Comando Desconocido\r\n");
+                break;
+        }
+    }
 }
