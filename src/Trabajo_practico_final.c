@@ -25,10 +25,6 @@
 
 #include <cr_section_macros.h>
 
-// TODO: insert other include files here
-
-// TODO: insert other definitions and declarations here
-
 //LDRs
 
 #define LDR_ARRIBA_IZQ_PORT     0
@@ -47,11 +43,7 @@
 #define LDR_ABAJO_DER_PIN       3     // Pin físico P0.3 -> Función AD0.6
 #define LDR_ABAJO_DER_CH        6     // Canal 6 del ADC
 
-//Mascara para LDRs va para configurar el ADC en modo Burst con los 4 canales de LDRs
-#define ADC_BURST_CHANNELS      ((1 << LDR_ARRIBA_IZQ_CH) | (1 << LDR_ARRIBA_DER_CH) | \
-                                 (1 << LDR_ABAJO_IZQ_CH)  | (1 << LDR_ABAJO_DER_CH))
-
-//SERVOS MOTORES
+//SERVOMOTORES
 // --- CONTROL DEL SERVO HORIZONTAL (AZIMUT) ---
 #define SERVO_HORIZ_PORT        0
 #define SERVO_HORIZ_PIN         6     // Pin físico P0.6 -> Función MAT2.0 (Timer 2 Match 0)
@@ -68,6 +60,20 @@
 #define SERVO_POS_MIN           1000  // Ancho de pulso para 0° (~1ms)
 #define SERVO_POS_CENTRO        1500  // Ancho de pulso para 90° (~1.5ms) - Posición de Emergencia
 #define SERVO_POS_MAX           2000  // Ancho de pulso para 180° (~2ms)
+
+// --- PARA EL MÓDULO GPDMA ---
+#define N 64 //La LUT va a tener 64 muestras para transferir (64 valores hacen un seno bastante limpio)
+// Tabla de 64 muestras para una onda senoidal en el DAC de 10 bits (con corrimiento de 6 bits)
+const uint32_t ondaSenoidal[N] = {
+    32768, 35968, 39104, 42240, 45248, 48192, 51008, 53632,
+    55872, 58048, 59968, 61696, 63104, 64256, 65088, 65408,
+    65472, 65408, 65088, 64256, 63104, 61696, 59968, 58048,
+    55872, 53632, 51008, 48192, 45248, 42240, 39104, 35968,
+    32768, 29568, 26432, 23296, 20288, 17344, 14528, 11904,
+    9664,  7488,  5568,  3840,  2432,  1280,  448,   128,
+    64,    128,   448,   1280,  2432,  3840,  5568,  7488,
+    9664,  11904, 14528, 17344, 20288, 23296, 26432, 29568
+};
 
 volatile uint32_t promedio_LDR_ARR_IZQ = 0;
 volatile uint32_t promedio_LDR_ARR_DER = 0; //Variables para ir guardando los promedios de los valores tomados por cada
@@ -90,6 +96,8 @@ void TIMER2_IRQHandler(void); //Handler para manejar interrupciones por TIMER2
 void configADC(void); //Función para habilitar el módulo ADC
 void configSysTick(void); //Función para inicializar el SysTick para empezar las conversiones del ADC
 void SysTick_Handler(void); //Handler para cambiar la flag de conversión
+void configDAC(void); //Función para configurar el módulo DAC
+void configDMA(void); //Función para configurar el módulo DMA
 void promediarConversiones(void); //Función para tomar los valores de los LDR
 void comparar(void); //Función para hacer la comparación entre los lados
 void moverIzquierda(void); //Función para ajustar la posición del servo horizontal hacia la izquierda
@@ -103,6 +111,8 @@ int main(void) {
 	configTimer();
 	configADC();
 	configSysTick();
+	configDAC();
+	configDMA();
 
 	while(1){
 
@@ -138,7 +148,7 @@ void configPtos(void){
 
 	cfgPto.Funcnum = PINSEL_FUNC_2; //Función 2 para P0.3 (AD0.6)
 	cfgPto.Pinnum = PINSEL_PIN_3; //Necesito cambiar a P0.3 para usar otro canal AD0.6 (P0.26 tiene salida del DAC)
-	PINSEL_ConfigPin(&cfgPto); //Configuro AD0.3 en modo AD0.6 (todo lo demás definido queda igual)
+	PINSEL_ConfigPin(&cfgPto); //Configuro AD0.3 en modo AD0.6 (lo demás definido queda igual)
 
 	cfgPto.Pinnum = PINSEL_PIN_26; //Para P0.26. Función 2 para P0.26 (AOUT)
 	PINSEL_ConfigPin(&cfgPto); //P0.26 queda configurado en modo AOUT para la salida al buzzer y transistor
@@ -166,7 +176,7 @@ void configTimer(void){
 	cfgMatch.ExtMatchOutputType = TIM_EXTMATCH_LOW; //Un evento de match de este canal pone el pin MAT2.0 en nivel bajo
 	//Lo mismo va a hacer el canal del servo vertical en cada evento de match pero en el pin MAT2.1 (con el EMR de cada canal)
 	cfgMatch.MatchValue = SERVO_POS_CENTRO; //Empieza contando 1.5 mSeg (valor para dejar el servo en 90°). Se cambia desupués
-	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuramos el canal 0 con todo lo que definimos
+	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuramos el canal 0 con lo que definimos
 
 	cfgMatch.MatchChannel = SERVO_VERT_MAT_CH; //Para el servo vertical usamos el canal 1 (MR1) del mismo timer
 	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuro ahora el canal 1 con lo que nos hace falta
@@ -177,7 +187,7 @@ void configTimer(void){
 	cfgMatch.ExtMatchOutputType = TIM_EXTMATCH_NOTHING; //El registro EMR de este canal no tiene que hacer nada
 	cfgMatch.MatchValue = SERVO_PWM_PERIODO; //Este canal va a contar siempre hasta 20 mSeg (período para que funcionen
 	//los servos). Este valor no va a cambiar nunca
-	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuro el canal 2 con todo lo que definimos
+	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuro el canal 2 con lo que definimos
 
 	NVIC_SetPriority(TIMER2_IRQn,0); //Esta va a ser la interrupción más prioritaria de todas (hace mover los servos)
 	TIM_ClearIntPending(LPC_TIM2,TIM_MR2_INT); //Limpio la interrupción por evento de MATCH2 en el TIMER2
@@ -268,15 +278,20 @@ void comparar(void){
 
 	int32_t errorHorizontal = ladoIzquierdo - ladoDerecho; //Calculo los errores de ambos lados
 	int32_t errorVertical = ladoArriba - ladoAbajo;
+	uint8_t movimiento = 0; //Flag para saber si hago sonar el buzzer o no. Empiezo asumiendo que no hay que hacerlo sonar
 
-	if(errorHorizontal > deadZone){moverIzquierda();}
+	if(errorHorizontal > deadZone){moverIzquierda();movimiento = 1;}
 		//Si la diferencia es lo suficientemente grande, hay que moverse horizontalmente
 		//Si además, la diferencia es muy positiva, nos tenemos que mover hacia la izquierda
-	else if(errorHorizontal < -deadZone){moverDerecha();} //Lo mismo pero hacia la derecha ahora
+		//Si me tengo que mover, seteo la flag de movimiento en 1
+	else if(errorHorizontal < -deadZone){moverDerecha();movimiento = 1;} //Lo mismo pero hacia la derecha ahora
 	//Si el error está entre -150 y 150, estoy bastante centrado y no me muevo
 
-	if(errorVertical > deadZone){moverArriba();} //Lo mismo de arriba pero para moverse verticalmente
-	else if(errorVertical < -deadZone){moverAbajo();}
+	if(errorVertical > deadZone){moverArriba();movimiento = 1;} //Lo mismo de arriba pero para moverse verticalmente
+	else if(errorVertical < -deadZone){moverAbajo();movimiento = 1;}
+
+	if(movimiento){GPDMA_ChannelCmd(0,ENABLE);} //Si me tengo que mover, habilito el canal para transferir los datos y hacer sonar el buzzer
+	else{GPDMA_ChannelCmd(0,DISABLE);} //Si no hay que moverse, deshabilito el canal y ya el buzzer no suena
 }
 
 void moverIzquierda(void){
@@ -301,7 +316,7 @@ void moverDerecha(void){
 
 void moverArriba(void){
 
-	posVertical -= paso; //Actualizo siemore el valor restandole esos 10 uSeg
+	posVertical -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posVertical <= SERVO_POS_MIN){
 		posVertical = SERVO_POS_MIN; //No dejo que el servo se mueva más de lo que permite el eje
 	}
@@ -311,10 +326,57 @@ void moverArriba(void){
 
 void moverAbajo(void){
 
-	posVertical += paso; //Actualizo siemore el valor sumandole esos 10 uSeg
+	posVertical += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
 	if(posVertical >= SERVO_POS_MAX){
 		posVertical = SERVO_POS_MAX; //No dejo que el servo se mueva más de lo que permite el eje
 	}
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
+}
+
+void configDAC(void){
+
+	DAC_CONVERTER_CFG_Type cfgDAC;
+
+	cfgDAC.DBLBUF_ENA = ENABLE; //Habilito el doble buffer para que los datos pasen al DAC cuando el temporizador acabe
+	cfgDAC.CNT_ENA = ENABLE; //Habilito el contador para que el DAC pueda generar las solicitudes DMA
+	cfgDAC.DMA_ENA = ENABLE; //Habilito las solicitudes de DMA con el DAC
+
+	DAC_Init(LPC_DAC); //Inicializo el módulo DAC con PCLK = 25 MHz y modo alto consumo y rapidez
+	DAC_SetBias(LPC_DAC,DAC_MAX_CURRENT_350uA); //Voy a sacar la onda a 1 KHz. Como el modo bajo consumo soporta hasta
+	//400 KHz, estoy sobradísimo. Y no consumo tanto (350 uA)
+	DAC_ConfigDAConverterControl(LPC_DAC,&cfgDAC); //Configuro el control del DAC con los campos que determiné
+	DAC_SetDMATimeOut(LPC_DAC,391); //Sabiendo que el DAC cuenta "ticks" a 25 MHz y quiero la onda con frecuencia 1 KHz,
+	//quiero 1000 ondas por segundo (sabiendo que la onda está "partida" en 64 valores). Entonces -> 1000 ondas/segundo*64 valores = 64000 pedidos por segundo
+	//Entonces tiene que contar X ticks para pedir un dato nuevo -> Ticks(PCLK)/Transferencias = 25MHz/64000 = 390.625 y redondeo
+}
+
+void configDMA(void){
+
+	static GPDMA_LLI_Type LLI; //La transferencia va a ser cíclica. Se transfiere la onda cada vez que se necesite siempre
+	GPDMA_Channel_CFG_Type cfgDMA;
+
+	LLI.SrcAddr = (uint32_t) ondaSenoidal; //Los datos siempre vienen del arreglo (el nombre del arreglo ya es un puntero a su primera posición)
+	LLI.DstAddr = (uint32_t) &(LPC_DAC -> DACR); //Los datos siempre van al DAC
+	LLI.NextLLI = (uint32_t) &LLI; //Es una transferencia cíclica. Siempre se manda lo mismo
+	LLI.Control = ((N << 0) | (2 << 18) | (2 << 21) | (1 << 26));
+	LLI.Control &= ~((1 << 27) | (1 << 31)); //Transfiero siempre 64 muestras; el tamaño de los datos de origen y llegada
+	//es siempre de 32 bits; habilito el incremento automático de dirección de origen; deshabilito el de dirección
+	//de destino; y deshabilito las interrupciones por DMA (no las necesito)
+
+	cfgDMA.ChannelNum = 0; //Vamos a usar el canal 0 del DMA para hacer las transferencias
+	cfgDMA.TransferSize = N; //Transfiero siempre 64 muestras
+	//cfgDMA.TransferWidth solamente se usa si la trasnferencia es M2M
+	cfgDMA.SrcMemAddr = (uint32_t) ondaSenoidal; //El primer dato siempre viene desde la primera posición del arreglo
+	cfgDMA.DstMemAddr = (uint32_t) &(LPC_DAC -> DACR); //Los datos van siempre hasta el DAC
+	cfgDMA.TransferType = GPDMA_TRANSFERTYPE_M2P; //Las tranferencias siempre son de memoria a periférico
+	cfgDMA.SrcConn = 0; //Nadie avisa que hay un dato listo para transferir
+	cfgDMA.DstConn = GPDMA_CONN_DAC; //El DAC es el que "pide" que le manden un dato
+	cfgDMA.DMALLI = (uint32_t) &LLI; //La referencia la primera vez que entro acá es la misma LLI que transfiero
+
+	GPDMA_Init(); //Inicializo el módulo DMA
+	GPDMA_Setup(&cfgDMA); //Configuro según los campos de la estructura
+	LPC_GPDMACH0 -> DMACCControl &= ~(1 << 31); //Aseguro que las interrupciones por DMA se deshabiliten. No las necesito
+	//No habilito el canal aún para hacer las transferencias de datos. Solamente lo voy a habilitar cuando los servos se
+	//estén moviendo
 }
