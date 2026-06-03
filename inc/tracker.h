@@ -3,12 +3,13 @@
 #include "lpc17xx_pinsel.h"
 #include "lpc17xx_adc.h"
 #include "LPC17xx_timer.h"
-#include "lpc17xx_systick.h"//nose si usamos
+#include "lpc17xx_systick.h"
 #include "lpc17xx_uart.h"
 #include "lpc17xx_gpdma.h"
 #include "lpc17xx_dac.h"
-
-
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 
 //define LDRs y adc
 

@@ -111,6 +111,9 @@ void TIMER0_IRQHandler(void)
 
 //-----------------implementacion uart--------------------
 
+//conflicto con pin fisico adc6  y uart0
+#define PASO_MIN   5u    // movimiento mínimo — muy lento
+#define PASO_MAX   50u   // movimiento máximo — muy rápido
 #define UART_BUF_SIZE 64
 
 // Buffers circulares de software para RX
@@ -119,103 +122,183 @@ volatile uint16_t rx_head = 0;
 volatile uint16_t rx_tail = 0;
 
 // Variables de estado de tu proyecto
-volatile uint8_t modo_automatico = 1;
+volatile uint8_t  modo_automatico = 1;   // 1=auto, 0=manual
+volatile uint8_t  paso_max        = 5;   // velocidad servo [1..20]
 
-void config_UART(void) {
+
+//BORRAR DESPUES DE MERGEAR LA OTRA RAMA
+volatile uint32_t ldr_raw[4];   // valores 12-bit de los LDRs
+volatile int32_t  angulo_H;     // ángulo servo horizontal
+volatile int32_t  angulo_V;     // ángulo servo vertical
+
+
+
+void config_UART1(void)
+{
+    // ── 1. Configurar pines usando la tabla estática del driver ───
+    //  La tabla PinCfg[] en UART_PinConfig() tiene índice fijo:
+    //    índice 2 → {PORT_0, PIN_15, PINSEL_FUNC_01} → TX1
+    //    índice 3 → {PORT_0, PIN_16, PINSEL_FUNC_01} → RX1
+    UART_PinConfig(2);   // TX1 → P0.15
+    UART_PinConfig(3);   // RX1 → P0.16
+
+    // ── 2. Parámetros de comunicación ────────────────────────────
     UART_CFG_T uartCfg;
-    UART_FIFO_CFG_T FioCfg;
-
-    // 1. Configurar Pines nativos usando la tabla estática del driver
-    UART_PinConfig(0); // Configura TX0 en P0.2
-    UART_PinConfig(1); // Configura RX0 en P0.3
-
-    // 2. Parámetros de comunicación: 9600 baudios, 8 bits de datos, sin paridad, 1 bit de parada
     uartCfg.baudRate = 9600;
     uartCfg.dataBits = UART_DBITS_8;
     uartCfg.parity   = UART_PARITY_NONE;
     uartCfg.stopBits = UART_STOPBIT_1;
-    
-    // Inicializa el periférico y calcula divisores de clock automáticamente
-    UART_Init(LPC_UART0, &uartCfg);
 
-    // 3. Configurar FIFOs de hardware (Trig Level 0 = interrumpe por cada 1 byte recibido)
-    FioCfg.level      = UART_FIFO_TRGLEV0;
-    FioCfg.resetRxBuf = ENABLE;
-    FioCfg.resetTxBuf = ENABLE;
-    FioCfg.dmaMode    = DISABLE;
-    UART_FIFOConfig(LPC_UART0, &FioCfg);
+    // UART_Init() internamente:
+    //   - Habilita PCONP_PCUART1
+    //   - Calcula y carga DLL/DLM/FDR con uart_set_divisors()
+    //   - Configura LCR (8N1)
+    //   - Limpia FIFOs, IER, ACR
+    //   - Limpia registros específicos de UART1 (MCR, RS485CTRL, etc.)
+    // El cast es necesario porque UART1 es LPC_UART1_TypeDef*
+    // pero UART_Init acepta LPC_UART_TypeDef* — el driver lo maneja internamente
+    UART_Init(LPC_UART1, &uartCfg);
+    // ── 3. Configurar FIFO ────────────────────────────────────────
+    //  TRGLEV0 = interrupción por cada 1 byte recibido
+    //  Reset ambas FIFOs al iniciar
+    UART_FIFO_CFG_T fifoCfg;
+    fifoCfg.level      = UART_FIFO_TRGLEV0;
+    fifoCfg.resetRxBuf = ENABLE;
+    fifoCfg.resetTxBuf = ENABLE;
+    fifoCfg.dmaMode    = DISABLE;
+    UART_FIFOConfig(LPC_UART1, &fifoCfg);
 
-    // 4. Habilitar interrupción por Recepción de Datos (RBR) en el periférico
-    UART_IntConfig(LPC_UART0, UART_INT_RBR, ENABLE);
-    
-    // 5. Habilitar la interrupción en el NVIC
-    NVIC_EnableIRQ(UART0_IRQn);
-    
-    // 6. Habilitar la transmisión en la UART (Line Control)
-    UART_TxEnable(LPC_UART0);
+    // ── 4. Habilitar interrupción RBR en el periférico ────────────
+    //  UART_INT_RBR → IER bit 0 (Receive Buffer Register interrupt)
+    UART_IntConfig(LPC_UART1, UART_INT_RBR, ENABLE);
+
+    // ── 5. Habilitar interrupción en el NVIC ─────────────────────
+    NVIC_EnableIRQ(UART1_IRQn);
+
+    // ── 6. Habilitar transmisión (TER bit 0) ─────────────────────
+    UART_TxEnable(LPC_UART1);
 }
 
-void UART0_IRQHandler(void) {
-    // Leer el Identificador de Interrupción (IIR)
-    uint32_t intsrc = UART_GetIntId(LPC_UART0);
-    
-    // Filtrar la causa de la interrupción. Buscamos UART_IID_RDA (Receive Data Available)
-    if ((intsrc & 0x0E) == 0x04) { 
-        
-        uint8_t byte_recibido = UART_ReceiveByte(LPC_UART0); //
-        
-        // Insertar en el buffer circular de software
-        uint16_t next_head = (rx_head + 1) % UART_BUF_SIZE;
-        if (next_head != rx_tail) { 
-            rx_buffer[rx_head] = byte_recibido;
-            rx_head = next_head;
+void UART1_IRQHandler(void)
+{
+    // UART_GetIntId() lee UARTx->IIR & 0x03CF
+    // Bits [3:1] indican la causa:
+    //   0x04 (010) = RDA  — Receive Data Available
+    //   0x0C (110) = CTI  — Character Time-out (FIFO con datos sin leer)
+    uint32_t iir   = UART_GetIntId(LPC_UART1);
+    uint32_t causa = iir & 0x0Eu;
+
+    if (causa == 0x04u || causa == 0x0Cu)
+    {
+        // UART_ReceiveByte() lee UARTx->RBR & 0xFF
+        uint8_t byte_rx  = UART_ReceiveByte(LPC_UART1);
+        uint8_t next_head = (uint8_t)((rx_head + 1u) % UART_BUF_SIZE);
+
+        if (next_head != rx_tail)   // buffer no lleno
+        {
+            rx_buffer[rx_head] = byte_rx;
+            rx_head         = next_head;
         }
+        // Si el buffer está lleno, el byte se descarta silenciosamente.
     }
 }
 
-void UART_EnviarString(const char *str) {
-    // UART_Send se encarga de recorrer el buffer e ir llenando la FIFO de hardware
-    UART_Send(LPC_UART0, (const uint8_t *)str, strlen(str), BLOCKING);
+static void UART1_EnviarString(const char *str)
+{
+    UART_Send(LPC_UART1,
+              (const uint8_t *)str,
+              (uint32_t)strlen(str),
+              BLOCKING);
+}
+void UART1_EnviarTelemetria(void)
+{
+    char buf[72];
+    snprintf(buf, sizeof(buf),
+             "$AI:%lu,AD:%lu,BI:%lu,BD:%lu,H:%ld,V:%ld,PASO:%u\r\n",
+             (unsigned long)promedio_LDR_ARR_IZQ,
+             (unsigned long)promedio_LDR_ARR_DER,
+             (unsigned long)promedio_LDR_ABJ_IZQ,
+             (unsigned long)promedio_LDR_ABJ_DER,
+             (long)angulo_H,
+             (long)angulo_V,
+             (unsigned)paso);          //error por merge
+
+    UART_Send(LPC_UART1,
+              (const uint8_t *)buf,
+              (uint32_t)strlen(buf),
+              BLOCKING);
 }
 
-void revisar_comandos_uart(void) {
-    // Mientras haya bytes sin procesar en el buffer circular que llenó la ISR
-    while (rx_head != rx_tail) {
-        
-        // Extraemos un solo carácter del buffer
-        uint8_t comando = rx_buffer[rx_tail];
-        rx_tail = (rx_tail + 1) % UART_BUF_SIZE; // Avanzamos la cola
-        
-        // Evaluamos directamente el carácter con un switch
-        switch (comando) {
-            
-            case 'M': // Si llega la letra 'M' (Mayúscula)
-            case 'm': // O si llega la letra 'm' (Minúscula)
-                modo_automatico = 0; // Desactivar el seguidor solar automático
-                UART_EnviarString("ACK: Modo Manual\r\n");
-                break;
-                
-            case 'A':
-            case 'a':
-                modo_automatico = 1; // Activar el seguidor solar automático
-                UART_EnviarString("ACK: Modo Auto\r\n");
-                break;
-                
-            case 'S':
-            case 's':
-                UART_EnviarString("ACK: Enviando Estado...\r\n");
+//  revisar_comandos_uart()
+//  Llamar desde el main loop — nunca desde una ISR.
+//  Vacía el buffer circular y ejecuta el comando correspondiente.
+
+void revisar_comandos_uart(void)
+{
+    while (rx_head != rx_tail)
+    {
+        uint8_t cmd = rx_buffer[rx_tail];
+        rx_tail     = (uint8_t)((rx_tail + 1u) % UART_BUF_SIZE);
+
+        switch (cmd)
+        {
+            // ── Modo automático ──────────────────────────────────
+            case 'A': case 'a':
+                modo_automatico = 1;
+                UART1_EnviarString("ACK:AUTO\r\n");
                 break;
 
-            // ─── FILTRO CRÍTICO PARA ENTER / FIN DE LÍNEA ───
-            case '\r': // Retorno de carro (Carriage Return)
-            case '\n': // Salto de línea (Line Feed)
-                // Si llegan estos caracteres, hacemos un break directo. 
-                // Los ignoramos en silencio para que no caigan en 'default'.
+            // ── Modo manual ──────────────────────────────────────
+            case 'M': case 'm':
+                modo_automatico = 0;
+                UART1_EnviarString("ACK:MANUAL\r\n");
                 break;
 
+            // ── Telemetría inmediata ─────────────────────────────
+            case 'S': case 's':
+                UART1_EnviarTelemetria();
+                break;
+
+            // ── Velocidad +5µs ───────────────────────────────────
+            case '+':
+            {
+                if (paso < PASO_MAX) paso += 5;
+                char ack[20];
+                snprintf(ack, sizeof(ack), "ACK:PASO:%u\r\n", paso);
+                UART1_EnviarString(ack);
+                break;
+            }
+
+            // ── Velocidad -5µs ───────────────────────────────────
+            case '-':
+            {
+                if (paso > PASO_MIN) paso -= 5;
+                char ack[20];
+                snprintf(ack, sizeof(ack), "ACK:PASO:%u\r\n", paso);
+                UART1_EnviarString(ack);
+                break;
+            }
+
+            // ── Reset servos al centro ───────────────────────────
+            // En tu sistema la posición real está en posHorizontal
+            // y posVertical (en µs), no en angulo_H/V.
+            // Hay que actualizar esas variables Y el Timer.
+            case 'R': case 'r':
+                modo_automatico = 0;
+                posHorizontal   = SERVO_POS_CENTRO;//error por merge
+                posVertical     = SERVO_POS_CENTRO;//error por merge
+                TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, posHorizontal);
+                TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH,  posVertical);
+                UART1_EnviarString("ACK:RESET\r\n");
+                break;
+
+            // ── Fin de línea del terminal — ignorar ──────────────
+            case '\r': case '\n':
+                break;
+
+            // ── Comando desconocido ──────────────────────────────
             default:
-                // Si mandan cualquier otra letra que no reconoce el sistema
-                UART_EnviarString("ERROR: Comando Desconocido\r\n");
+                UART1_EnviarString("ERR:CMD\r\n");
                 break;
         }
     }
