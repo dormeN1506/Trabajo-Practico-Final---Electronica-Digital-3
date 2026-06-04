@@ -57,9 +57,11 @@
 // --- VALORES LÍMITE DE PASO DEL PWM (Ticks de reloj del Timer) ---
 // Estos valores dependen de tu frecuencia de clock, pero sirven para tipificar los topes
 #define SERVO_PWM_PERIODO       20000 // Período de 20ms para los Servos (Frecuencia: 50Hz)
-#define SERVO_POS_MIN           1000  // Ancho de pulso para 0° (~1ms)
+#define SERVO_POS_MIN_PAN       1000  // Ancho de pulso para 0° (~1ms). Servo horizontal
+#define SERVO_POS_MAX_PAN       2000  // Ancho de pulso para 180° (~2ms). Servo horizontal
+#define SERVO_POS_MIN_TILT      1085  // Ancho de pulso para 15°. El rango de TILT no llega hasta los 180° limpios
+#define SERVO_POS_MAX_TILT      1915  // Ancho de pulso para 90°
 #define SERVO_POS_CENTRO        1500  // Ancho de pulso para 90° (~1.5ms) - Posición de Emergencia
-#define SERVO_POS_MAX           2000  // Ancho de pulso para 180° (~2ms)
 
 // --- PARA EL MÓDULO GPDMA ---
 #define N 64 //La LUT va a tener 64 muestras para transferir (64 valores hacen un seno bastante limpio)
@@ -297,8 +299,8 @@ void comparar(void){
 void moverIzquierda(void){
 
 	posHorizontal -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
-	if(posHorizontal <= SERVO_POS_MIN){
-		posHorizontal = SERVO_POS_MIN; //No dejo que el servo se mueva más de lo que permite el eje
+	if(posHorizontal <= SERVO_POS_MIN_PAN){
+		posHorizontal = SERVO_POS_MIN_PAN; //No dejo que el servo se mueva más de lo que permite el eje
 	}
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,posHorizontal); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
@@ -307,8 +309,8 @@ void moverIzquierda(void){
 void moverDerecha(void){
 
 	posHorizontal += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
-	if(posHorizontal >= SERVO_POS_MAX){
-		posHorizontal = SERVO_POS_MAX; //No dejo que el servo se mueva más de lo que permite el eje
+	if(posHorizontal >= SERVO_POS_MAX_PAN){
+		posHorizontal = SERVO_POS_MAX_PAN; //No dejo que el servo se mueva más de lo que permite el eje
 	}
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,posHorizontal); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
@@ -317,8 +319,8 @@ void moverDerecha(void){
 void moverArriba(void){
 
 	posVertical -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
-	if(posVertical <= SERVO_POS_MIN){
-		posVertical = SERVO_POS_MIN; //No dejo que el servo se mueva más de lo que permite el eje
+	if(posVertical <= SERVO_POS_MIN_TILT){
+		posVertical = SERVO_POS_MIN_TILT; //No dejo que el servo se mueva más de lo que permite el eje
 	}
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
@@ -327,8 +329,8 @@ void moverArriba(void){
 void moverAbajo(void){
 
 	posVertical += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
-	if(posVertical >= SERVO_POS_MAX){
-		posVertical = SERVO_POS_MAX; //No dejo que el servo se mueva más de lo que permite el eje
+	if(posVertical >= SERVO_POS_MAX_TILT){
+		posVertical = SERVO_POS_MAX_TILT; //No dejo que el servo se mueva más de lo que permite el eje
 	}
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
