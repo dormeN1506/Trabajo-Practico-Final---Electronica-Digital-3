@@ -1,0 +1,17 @@
+C:\Users\Windows 10\Documents\MCUXpressoIDE_25.6.136\workspace\CMSISv2p00_LPC17xx\inc/core_cm3.h:928:22:NVIC_EnableIRQ	16	static
+C:\Users\Windows 10\Documents\MCUXpressoIDE_25.6.136\workspace\CMSISv2p00_LPC17xx\inc/core_cm3.h:1012:22:NVIC_SetPriority	16	static
+../src/Trabajo_practico_final.c:110:5:main	8	static
+../src/Trabajo_practico_final.c:138:6:configPtos	24	static
+../src/Trabajo_practico_final.c:165:6:configTimer	32	static
+../src/Trabajo_practico_final.c:204:6:TIMER2_IRQHandler	8	static
+../src/Trabajo_practico_final.c:213:6:configADC	8	static
+../src/Trabajo_practico_final.c:222:6:configSysTick	8	static
+../src/Trabajo_practico_final.c:230:6:SysTick_Handler	4	static
+../src/Trabajo_practico_final.c:236:6:promediarConversiones	16	static
+../src/Trabajo_practico_final.c:279:6:comparar	24	static
+../src/Trabajo_practico_final.c:299:6:moverIzquierda	8	static
+../src/Trabajo_practico_final.c:309:6:moverDerecha	8	static
+../src/Trabajo_practico_final.c:319:6:moverArriba	8	static
+../src/Trabajo_practico_final.c:329:6:moverAbajo	8	static
+../src/Trabajo_practico_final.c:339:6:configDAC	16	static
+../src/Trabajo_practico_final.c:356:6:configDMA	48	static
