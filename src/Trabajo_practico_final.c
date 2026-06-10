@@ -382,3 +382,230 @@ void configDMA(void){
 	//No habilito el canal aún para hacer las transferencias de datos. Solamente lo voy a habilitar cuando los servos se
 	//estén moviendo
 }
+
+//-----------------implementacion UART--------------------
+// ── Limites de velocidad — 
+#define PASO_MIN        5u
+#define PASO_MAX        50u
+// ── Buffer circular RX
+#define UART_BUF_SIZE   64u
+static volatile uint8_t rx_buffer[UART_BUF_SIZE];
+static volatile uint8_t rx_head = 0;   // escribe 
+static volatile uint8_t rx_tail = 0;   // lee 
+volatile uint8_t modo_automatico = 1;   // 1=auto, 0=manual
+
+//config uart1
+void config_UART1(void)
+{
+   
+	//configuramos pines TX1=P0.15 y RX1=P0.16 
+    PINSEL_CFG_Type cfgPin;
+    cfgPin.Portnum   = PINSEL_PORT_0;
+    cfgPin.Funcnum   = PINSEL_FUNC_1;       // Función 1 = TXD1/RXD1
+    cfgPin.Pinmode   = PINSEL_PINMODE_TRISTATE;
+    cfgPin.OpenDrain = PINSEL_PINMODE_NORMAL;
+
+    cfgPin.Pinnum = 15;                     // P0.15 = TXD1
+    PINSEL_ConfigPin(&cfgPin);
+
+    cfgPin.Pinnum = 16;                     // P0.16 = RXD1
+    PINSEL_ConfigPin(&cfgPin);
+
+    //parametros
+    UART_CFG_Type uartCfg;
+    uartCfg.Baud_rate = 9600;			//baudrate
+    uartCfg.Databits  = UART_DATABIT_8;//8 bits de datos
+    uartCfg.Parity    = UART_PARITY_NONE;//sin paridad
+    uartCfg.Stopbits  = UART_STOPBIT_1;//1 bit de parada
+
+  
+    UART_Init(LPC_UART1, &uartCfg);
+
+    //FIFO: interrupción por cada 1 byte recibido
+    
+    UART_FIFO_CFG_Type fifoCfg;
+    fifoCfg.FIFO_Level      = UART_FIFO_TRGLEV0;
+    fifoCfg.FIFO_ResetRxBuf = ENABLE;
+    fifoCfg.FIFO_ResetTxBuf = ENABLE;
+    fifoCfg.FIFO_DMAMode    = DISABLE;
+    UART_FIFOConfig(LPC_UART1, &fifoCfg);
+
+	//habilitamos interrupción por recepción de datos (RBR)
+    UART_IntConfig(LPC_UART1, UART_INTCFG_RBR, ENABLE);
+
+    //  NVIC con prioridad menor que Timer2 
+    NVIC_SetPriority(UART1_IRQn, 2);
+    NVIC_EnableIRQ(UART1_IRQn);
+
+    //habilitamos la transmisión 
+    UART_TxCmd(LPC_UART1, ENABLE);
+}
+//isr de uart1 
+void UART1_IRQHandler(void)//guarda el byte recibido en el buffer
+{
+    // Identificar causa: 0x04=RDA (dato disponible), 0x0C=CTI (timeout FIFO)
+    uint32_t causa = UART_GetIntId(LPC_UART1) & 0x0Eu;
+
+    if (causa == 0x04u || causa == 0x0Cu)
+    {
+        uint8_t byte_rx   = UART_ReceiveByte(LPC_UART1);
+        uint8_t next_head = (uint8_t)((rx_head + 1u) % UART_BUF_SIZE);
+
+        if (next_head != rx_tail)       // solo guarda si hay espacio
+        {
+            rx_buffer[rx_head] = byte_rx;
+            rx_head            = next_head;
+        }
+        // Si el buffer está lleno, el byte se descarta.
+        
+    }
+}
+//
+static void UART1_EnviarString(const char *str)
+{
+    UART_Send(LPC_UART1,
+              (uint8_t *)str,
+              (uint32_t)strlen(str),
+              BLOCKING);
+}
+//enviar telemetría por UART1
+void UART1_EnviarTelemetria(void)
+{
+    char buf[72];
+    snprintf(buf, sizeof(buf),
+             "$AI:%lu,AD:%lu,BI:%lu,BD:%lu,PH:%u,PV:%u,PASO:%u\r\n",
+             promedio_LDR_ARR_IZQ,
+             promedio_LDR_ARR_DER,
+             promedio_LDR_ABJ_IZQ,
+             promedio_LDR_ABJ_DER,
+             posHorizontal,
+             posVertical,
+             paso);
+
+    UART_Send(LPC_UART1,
+              (uint8_t *)buf,
+              (uint32_t)strlen(buf),
+              BLOCKING);
+}
+void revisar_comandos_uart(void)
+{
+    while (rx_head != rx_tail)
+    {
+        uint8_t cmd = rx_buffer[rx_tail];
+        rx_tail     = (uint8_t)((rx_tail + 1u) % UART_BUF_SIZE);
+
+        switch (cmd)
+        {
+            // Activa el seguidor automático
+            case 'A': case 'a':
+                modo_automatico = 1;
+                UART1_EnviarString("ACK:AUTO\r\n");
+                break;
+
+            // Congela los servos en su posición actual
+            case 'M': case 'm':
+                modo_automatico = 0;
+                UART1_EnviarString("ACK:MANUAL\r\n");
+                break;
+
+            // Envía telemetría inmediatamente sin esperar el contador
+            case 'S': case 's':
+                UART1_EnviarTelemetria();
+                break;
+
+            // Aumenta la velocidad de movimiento de los servos
+            case '+':
+            {
+                if (paso < PASO_MAX) paso += 5u;
+                char ack[20];
+                snprintf(ack, sizeof(ack), "ACK:PASO:%u\r\n", paso);
+                UART1_EnviarString(ack);
+                break;
+            }
+
+            // Disminuye la velocidad de movimiento de los servos
+            case '-':
+            {
+                if (paso > PASO_MIN) paso -= 5u;
+                char ack[20];
+                snprintf(ack, sizeof(ack), "ACK:PASO:%u\r\n", paso);
+                UART1_EnviarString(ack);
+                break;
+            }
+
+            // Lleva ambos servos al centro (90°) y activa modo manual
+            // Actualiza posHorizontal/posVertical Y el Timer — ambos necesarios
+            case 'R': case 'r':
+                modo_automatico = 0;
+                posHorizontal   = SERVO_POS_CENTRO;
+                posVertical     = SERVO_POS_CENTRO;
+                TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, posHorizontal);
+                TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH,  posVertical);
+                UART1_EnviarString("ACK:RESET\r\n");
+                break;
+
+            // Fin de línea del terminal — ignorar silenciosamente
+            case '\r': case '\n':
+                break;
+
+            // Cualquier otro caracter no reconocido
+            default:
+                UART1_EnviarString("ERR:CMD\r\n");
+                break;
+        }
+    }
+}
+
+/*asi seria el main
+int main(void)
+{
+    
+    configPtos();      
+    configTimer();    
+    configADC();       
+    configSysTick();   
+    config_UART1();     
+    
+    UART1_EnviarString("Seguidor Solar OK\r\n");
+
+
+    static uint8_t tele_cnt = 0;
+
+    while (1)
+    {
+        
+        revisar_comandos_uart();
+
+       
+        if (convertir)
+        {
+            convertir = 0;
+
+            
+            promediarConversiones();
+
+           
+            ladoIzquierdo = promedio_LDR_ARR_IZQ + promedio_LDR_ABJ_IZQ;
+            ladoDerecho   = promedio_LDR_ARR_DER + promedio_LDR_ABJ_DER;
+            ladoArriba    = promedio_LDR_ARR_IZQ + promedio_LDR_ARR_DER;
+            ladoAbajo     = promedio_LDR_ABJ_IZQ + promedio_LDR_ABJ_DER;
+
+           
+            if (modo_automatico)
+            {
+                comparar();
+            }
+
+            if (++tele_cnt >= 10u)
+            {
+                tele_cnt = 0;
+                UART1_EnviarTelemetria();
+            }
+        }
+    }
+
+    return 0;
+}
+
+
+*/ 
