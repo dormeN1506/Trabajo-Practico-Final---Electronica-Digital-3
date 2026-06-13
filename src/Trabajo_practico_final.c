@@ -17,13 +17,14 @@
 #include "lpc17xx_gpio.h"
 #include "lpc17xx_pinsel.h"
 #include "lpc17xx_adc.h"
-#include "LPC17xx_timer.h"
+#include "lpc17xx_timer.h"
 #include "lpc17xx_uart.h"
 #include "lpc17xx_gpdma.h"
 #include "lpc17xx_dac.h"
 #include "lpc17xx_systick.h"
 
 #include <cr_section_macros.h>
+#include <stdio.h>
 
 //LDRs
 
@@ -40,57 +41,63 @@
 #define LDR_ABAJO_IZQ_CH        2     // Canal 2 del ADC
 
 #define LDR_ABAJO_DER_PORT      0
-#define LDR_ABAJO_DER_PIN       3     // Pin físico P0.3 -> Función AD0.6
-#define LDR_ABAJO_DER_CH        6     // Canal 6 del ADC
+#define LDR_ABAJO_DER_PIN       2     // Pin físico P0.2 -> Función AD0.7
+#define LDR_ABAJO_DER_CH        7     // Canal 7 del ADC
 
 //SERVOMOTORES
-// --- CONTROL DEL SERVO HORIZONTAL (AZIMUT) ---
+// --- CONTROL DEL SERVO HORIZONTAL (PAN) ---
 #define SERVO_HORIZ_PORT        0
 #define SERVO_HORIZ_PIN         6     // Pin físico P0.6 -> Función MAT2.0 (Timer 2 Match 0)
 #define SERVO_HORIZ_MAT_CH      0     // Canal de Match asignado
 
-// --- CONTROL DEL SERVO VERTICAL (ELEVACIÓN) ---
+// --- CONTROL DEL SERVO VERTICAL (TILT) ---
 #define SERVO_VERT_PORT         0
 #define SERVO_VERT_PIN          7     // Pin físico P0.7 -> Función MAT2.1 (Timer 2 Match 1)
 #define SERVO_VERT_MAT_CH       1     // Canal de Match asignado
 
 // --- VALORES LÍMITE DE PASO DEL PWM (Ticks de reloj del Timer) ---
-// Estos valores dependen de tu frecuencia de clock, pero sirven para tipificar los topes
+
 #define SERVO_PWM_PERIODO       20000 // Período de 20ms para los Servos (Frecuencia: 50Hz)
 #define SERVO_POS_MIN_PAN       1000  // Ancho de pulso para 0° (~1ms). Servo horizontal
 #define SERVO_POS_MAX_PAN       2000  // Ancho de pulso para 180° (~2ms). Servo horizontal
-#define SERVO_POS_MIN_TILT      1085  // Ancho de pulso para 15°. El rango de TILT no llega hasta los 180° limpios
-#define SERVO_POS_MAX_TILT      1915  // Ancho de pulso para 90°
+#define SERVO_POS_MIN_TILT      1000//1085  // Ancho de pulso para 15°. El rango de TILT no llega hasta los 180° limpios
+#define SERVO_POS_MAX_TILT      2000//1915  // Ancho de pulso para 90°
 #define SERVO_POS_CENTRO        1500  // Ancho de pulso para 90° (~1.5ms) - Posición de Emergencia
+#define CANAL_MATCH_PERIODO     2     //El canal 2 del TIMER2 es el que usamos para controlar el período de la onda de los servos
+
+// --- PARA EL MÓDULO UART ---
+#define PIN_Tx                  0     //P0.0 es el Tx que vamos a usar
+#define PIN_Rx                  1     //P0.1 es el Rx que vamos a usar
 
 // --- PARA EL MÓDULO GPDMA ---
+
 #define N 64 //La LUT va a tener 64 muestras para transferir (64 valores hacen un seno bastante limpio)
 // Tabla de 64 muestras para una onda senoidal en el DAC de 10 bits (con corrimiento de 6 bits)
-const uint32_t ondaSenoidal[N] = {
-    32768, 35968, 39104, 42240, 45248, 48192, 51008, 53632,
-    55872, 58048, 59968, 61696, 63104, 64256, 65088, 65408,
-    65472, 65408, 65088, 64256, 63104, 61696, 59968, 58048,
-    55872, 53632, 51008, 48192, 45248, 42240, 39104, 35968,
-    32768, 29568, 26432, 23296, 20288, 17344, 14528, 11904,
-    9664,  7488,  5568,  3840,  2432,  1280,  448,   128,
-    64,    128,   448,   1280,  2432,  3840,  5568,  7488,
-    9664,  11904, 14528, 17344, 20288, 23296, 26432, 29568
+uint32_t ondaSenoidal[N] = {
+		32768, 35968, 39104, 42240, 45248, 48192, 51008, 53632,
+		55872, 58048, 59968, 61696, 63104, 64256, 65088, 65408,
+		65472, 65408, 65088, 64256, 63104, 61696, 59968, 58048,
+		55872, 53632, 51008, 48192, 45248, 42240, 39104, 35968,
+		32768, 29568, 26432, 23296, 20288, 17344, 14528, 11904,
+		9664,  7488,  5568,  3840,  2432,  1280,  448,   128,
+		64,    128,   448,   1280,  2432,  3840,  5568,  7488,
+		9664,  11904, 14528, 17344, 20288, 23296, 26432, 29568
 };
 
-volatile uint32_t promedio_LDR_ARR_IZQ = 0;
-volatile uint32_t promedio_LDR_ARR_DER = 0; //Variables para ir guardando los promedios de los valores tomados por cada
-volatile uint32_t promedio_LDR_ABJ_IZQ = 0; //LDR usado
-volatile uint32_t promedio_LDR_ABJ_DER = 0;
+volatile uint32_t valor_LDR_ARR_IZQ = 0;
+volatile uint32_t valor_LDR_ARR_DER = 0; //Variables para ir guardando los valores tomados por cada
+volatile uint32_t valor_LDR_ABJ_IZQ = 0; //LDR usado
+volatile uint32_t valor_LDR_ABJ_DER = 0;
 volatile int32_t ladoIzquierdo, ladoDerecho, ladoArriba, ladoAbajo; //Variables para sumar la luz toal que recibe cada lado
 volatile uint16_t posHorizontal = SERVO_POS_CENTRO; //Los 2 servos empiezan en su posición central
 volatile uint16_t posVertical = SERVO_POS_CENTRO;
 
 volatile uint8_t convertir = 0; //Flag para empezar las conversiones. Empieza sin convertir
-volatile uint8_t deadZone = 150; //Valor para considerar si hay que moverse o no
-volatile uint8_t paso = 10; //Valor (en uSeg) que tengo que sumar (o restar) a los ciclos de trabajo de las ondas para mover los servos
+volatile uint16_t deadZone = 25; //Valor para considerar si hay que moverse o no
+volatile uint8_t paso = 30; //Valor (en uSeg) que tengo que sumar (o restar) a los ciclos de trabajo de las ondas para mover los servos
+volatile uint8_t flag_nuevoComando = 0; //Flag para cuando se recibe un comando
+volatile uint8_t comando; //Variable para guardar el comando recibido por la placa y saber qué acción tomar (son letras, así que 8 bits están bien)
 
-
-//DEFINES PARA UART
 
 void configPtos(void); //Función para configurar todos los puertos y pines que usamos
 void configTimer(void); //Función para configurar el TIMER2 que genera las PWM de los servos
@@ -100,12 +107,58 @@ void configSysTick(void); //Función para inicializar el SysTick para empezar la
 void SysTick_Handler(void); //Handler para cambiar la flag de conversión
 void configDAC(void); //Función para configurar el módulo DAC
 void configDMA(void); //Función para configurar el módulo DMA
+void configUART(void); //Función para configurar el módulo UART
+void UART3_IRQHandler(void); //Handler para cuando se recibe desde la computadora un comando
 void promediarConversiones(void); //Función para tomar los valores de los LDR
 void comparar(void); //Función para hacer la comparación entre los lados
 void moverIzquierda(void); //Función para ajustar la posición del servo horizontal hacia la izquierda
 void moverDerecha(void); //Función para ajustar la posición del servo horizontal hacia la derecha
 void moverArriba(void); //Función para ajustar la posición del servo vertical hacia arriba
 void moverAbajo(void); //Función para ajustar la posición del servo vertical hacia abajo
+void procesarComando(void); //Función para procesar el comando que llegó desde la computadora
+/*
+int main(void) {
+
+    // 1. Inicializamos los pines y el Timer de los servos
+    configPtos();
+    configTimer();
+    configDAC();
+    	configDMA();
+    	GPDMA_ChannelCmd(0,ENABLE);
+
+
+    while(1){
+        // --- POSICIÓN 1: MÍNIMO (0 grados) ---
+        TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, SERVO_POS_MIN_PAN);
+        TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH, SERVO_POS_MIN_TILT);
+
+        // Esperamos un par de segundos para que el motor llegue físicamente
+        for(volatile int i = 0; i < 10000000; i++);
+
+        // --- POSICIÓN 2: CENTRO (90 grados) ---
+        TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, SERVO_POS_CENTRO);
+        TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH, SERVO_POS_CENTRO);
+
+        // Esperamos de nuevo
+        for(volatile int i = 0; i < 10000000; i++);
+
+        // --- POSICIÓN 3: MÁXIMO ---
+        TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, SERVO_POS_MAX_PAN);
+        TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH, SERVO_POS_MAX_TILT);
+
+        // Esperamos de nuevo
+        for(volatile int i = 0; i < 10000000; i++);
+    }
+
+    return 0 ;
+}
+*/
+
+// --- VARIABLES DE CALIBRACIÓN FIJA ---
+//volatile int32_t offsetarribaizquiera = 956;
+//volatile int32_t offsetarribaderecha = 1092;
+//volatile int32_t offsetabajoizquierda = 1192;
+//volatile int32_t offsetabajoderecha = 0;
 
 int main(void) {
 
@@ -115,48 +168,60 @@ int main(void) {
 	configSysTick();
 	configDAC();
 	configDMA();
+	configUART();
 
 	while(1){
 
 		if(convertir){ //Si el flag para convertir está habilitado
 			convertir = 0; //Deshabilito las conversiones hasta que vuelva a pasar el tiempo necesario
 			promediarConversiones();
-
-			ladoIzquierdo = promedio_LDR_ARR_IZQ + promedio_LDR_ABJ_IZQ;
-			ladoDerecho = promedio_LDR_ARR_DER + promedio_LDR_ABJ_DER; //Sumo la luz total que recibe cada lado
-			ladoArriba = promedio_LDR_ARR_IZQ + promedio_LDR_ARR_DER; //No hace falta promediar porque son valores totales
-			ladoAbajo = promedio_LDR_ABJ_IZQ + promedio_LDR_ABJ_DER;
+			//promedio_LDR_ABJ_IZQ += 97;
+			 //   promedio_LDR_ABJ_DER -= 123;
+			ladoIzquierdo = valor_LDR_ARR_IZQ + valor_LDR_ABJ_IZQ;
+			ladoDerecho = valor_LDR_ARR_DER + valor_LDR_ABJ_DER;
+			ladoArriba = valor_LDR_ARR_IZQ + valor_LDR_ARR_DER;
+			ladoAbajo = valor_LDR_ABJ_IZQ + valor_LDR_ABJ_DER;
 
 			comparar(); //Comparlo la luz que recibo de cada lado. El llamado y las actualizaciones tienen que ser acá
 			//adentro para tener siempre los datos más recientes
 		}
+
+		if(flag_nuevoComando){ //Si llegó un comando desde la computadora
+			flag_nuevoComando = 0; //Reinicio el flag para no volver a entrar
+			procesarComando(); //Voy a procesar el comando que llegó
+		}
 	}
 
-    return 0 ;
+    return 0;
 }
 
 void configPtos(void){
 
 	PINSEL_CFG_Type cfgPto;
 
-	cfgPto.Portnum = PINSEL_PORT_0; //Vamos a usar para práctciamente todas las conexiones el purto 0
-	cfgPto.Funcnum = PINSEL_FUNC_1; //Función 1 (AD0.x) para los pines por donde se van a conectar los 4 LDR
+	cfgPto.Portnum = PINSEL_PORT_0; //Vamos a usar para prácticamente todas las conexiones en el purto 0
+	cfgPto.Funcnum = PINSEL_FUNC_1; //Función 1 (AD0.x) para los pines por donde se van a conectar los primeros 3 LDR
 	cfgPto.Pinmode = PINSEL_PINMODE_TRISTATE; //Sin resistencias internas para los pines
 	cfgPto.OpenDrain = PINSEL_PINMODE_NORMAL; //No usamos open-drain para ningún pin
-	for(int i=23;i<26;i++){
+	for(int i=LDR_ARRIBA_IZQ_PIN;i<=LDR_ABAJO_IZQ_PIN;i++){
 		cfgPto.Pinnum = i;
 		PINSEL_ConfigPin(&cfgPto); //Desde P0.23 hasta P0.25 queda configurados como AD0.0 - AD0.2 con lo que definimos arriba
 	}
 
-	cfgPto.Funcnum = PINSEL_FUNC_2; //Función 2 para P0.3 (AD0.6)
-	cfgPto.Pinnum = PINSEL_PIN_3; //Necesito cambiar a P0.3 para usar otro canal AD0.6 (P0.26 tiene salida del DAC)
-	PINSEL_ConfigPin(&cfgPto); //Configuro AD0.3 en modo AD0.6 (lo demás definido queda igual)
+	cfgPto.Funcnum = PINSEL_FUNC_2; //Función 2 para P0.2 (AD0.2)
+	cfgPto.Pinnum = LDR_ABAJO_DER_PIN; //Necesito cambiar a P0.2 para usar otro canal AD0.6 (P0.26 tiene salida del DAC)
+	PINSEL_ConfigPin(&cfgPto); //Configuro AD0.2 en modo AD0.7 (lo demás definido queda igual)
+
+	for(int i=PIN_Tx;i<2;i++){
+		cfgPto.Pinnum = i; //P0.0 y P0.1 quedan con su función 2 (TXD3 y RXD3 respectivamente)
+		PINSEL_ConfigPin(&cfgPto); //Configuro los pines según la estructura. Lo que no cambia queda con los valores anteriores
+	}
 
 	cfgPto.Pinnum = PINSEL_PIN_26; //Para P0.26. Función 2 para P0.26 (AOUT)
 	PINSEL_ConfigPin(&cfgPto); //P0.26 queda configurado en modo AOUT para la salida al buzzer y transistor
 
 	cfgPto.Funcnum = PINSEL_FUNC_3; //Función 3 para P0.6 y P0.7 en modo MAT2.0 y MAT2.1 respectivamente
-	for(int i=6;i<8;i++){
+	for(int i=SERVO_HORIZ_PIN;i<=SERVO_VERT_PIN;i++){
 		cfgPto.Pinnum = i;
 		PINSEL_ConfigPin(&cfgPto); //P0.6 en modo MAT2.0 y P0.7 en modo MAT2.1
 	}
@@ -177,13 +242,13 @@ void configTimer(void){
 	cfgMatch.StopOnMatch = DISABLE; //Ninguno de los canales usados para el contador en un evento
 	cfgMatch.ExtMatchOutputType = TIM_EXTMATCH_LOW; //Un evento de match de este canal pone el pin MAT2.0 en nivel bajo
 	//Lo mismo va a hacer el canal del servo vertical en cada evento de match pero en el pin MAT2.1 (con el EMR de cada canal)
-	cfgMatch.MatchValue = SERVO_POS_CENTRO; //Empieza contando 1.5 mSeg (valor para dejar el servo en 90°). Se cambia desupués
+	cfgMatch.MatchValue = SERVO_POS_CENTRO; //Empieza contando 1.5 mSeg (valor para dejar el servo en 90°). Se cambia después
 	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuramos el canal 0 con lo que definimos
 
 	cfgMatch.MatchChannel = SERVO_VERT_MAT_CH; //Para el servo vertical usamos el canal 1 (MR1) del mismo timer
 	TIM_ConfigMatch(LPC_TIM2,&cfgMatch); //Configuro ahora el canal 1 con lo que nos hace falta
 
-	cfgMatch.MatchChannel = 2; //Para controlar el período de las ondas, usamos el canal 2 (MR2) del mismo timer
+	cfgMatch.MatchChannel = CANAL_MATCH_PERIODO; //Para controlar el período de las ondas, usamos el canal 2 (MR2) del mismo timer
 	cfgMatch.IntOnMatch = ENABLE; //Un evento en este canal si va a generar una interrupción
 	cfgMatch.ResetOnMatch = ENABLE; //Y también va a reiniciar el contador
 	cfgMatch.ExtMatchOutputType = TIM_EXTMATCH_NOTHING; //El registro EMR de este canal no tiene que hacer nada
@@ -221,83 +286,93 @@ void configADC(void){
 
 void configSysTick(void){
 
-	SYSTICK_InternalInit(100); //Inicializo el SysTick para que use el clock interno y genere una interrupción cada 100 mSeg
+	SYSTICK_InternalInit(20); //Inicializo el SysTick para que use el clock interno y genere una interrupción cada 20 mSeg
 	NVIC_SetPriority(SysTick_IRQn,1); //Seteo la prioridad en un poco menos importante que la del timer de los servos
 	SYSTICK_Cmd(ENABLE); //Habilito el contador
 	SYSTICK_IntCmd(ENABLE); //Habilito la interrupción por SysTick
 }
 
 void SysTick_Handler(void){ //Si entro acá, pasaron 100 mSeg y tengo que habilitar las conversiones
-
 	convertir = 1; //Pongo la flag de conversión en uno
 	//No hace falta limpiar banderas para el SysTick
 }
 
 void promediarConversiones(void){
 
-	promedio_LDR_ARR_IZQ = 0; //Limpio todas las variables para que no queden con valores
-	promedio_LDR_ARR_DER = 0; //basura antes de tomar los verdadores valores
-	promedio_LDR_ABJ_IZQ = 0;
-	promedio_LDR_ABJ_DER = 0;
+	valor_LDR_ARR_IZQ = 0; //Limpio todas las variables para que no queden con valores
+	valor_LDR_ARR_DER = 0; //basura antes de tomar los verdadores valores
+	valor_LDR_ABJ_IZQ = 0;
+	valor_LDR_ABJ_DER = 0;
 
-	for(int i=0;i<16;i++){
-		ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,ENABLE); //Habilito el canal 0 donde está el LDR de arriba a la izquierda
-		ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-		while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_IZQ_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-		//vamos de este while
-		promedio_LDR_ARR_IZQ += ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_IZQ_CH); //Voy sumando los valores que consigo
-		ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
+	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,ENABLE); //Habilito el canal 0 donde está el LDR de arriba a la izquierda
+	ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
+	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_IZQ_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
+	//vamos de este while
+	valor_LDR_ARR_IZQ = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_IZQ_CH); //Tomo el valor muestreado
+	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
 
-		ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,ENABLE); //Habilito el canal 1 donde está el LDR de arriba a la derecha
-		ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-		while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_DER_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-		//vamos de este while
-		promedio_LDR_ARR_DER += ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_DER_CH); //Voy sumando los valores que consigo
-		ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
+	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,ENABLE); //Habilito el canal 1 donde está el LDR de arriba a la derecha
+	ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
+	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_DER_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
+	//vamos de este while
+	valor_LDR_ARR_DER = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_DER_CH); //Tomo el valor muestreado
+	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
 
-		ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,ENABLE); //Habilito el canal 2 donde está el LDR de abajo a la izquierda
-		ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-		while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_IZQ_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-		//vamos de este while
-		promedio_LDR_ABJ_IZQ += ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_IZQ_CH); //Voy sumando los valores que consigo
-		ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
+	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,ENABLE); //Habilito el canal 2 donde está el LDR de abajo a la izquierda
+	ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
+	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_IZQ_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
+	//vamos de este while
+	valor_LDR_ABJ_IZQ = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_IZQ_CH); //Tomo el valor muestreado
+	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
 
-		ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,ENABLE); //Habilito el canal 6 donde está el LDR de abajo a la derecha
-		ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-		while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_DER_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-		//vamos de este while
-		promedio_LDR_ABJ_DER += ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_DER_CH); //Voy sumando los valores que consigo
-		ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
-	}
-
-	promedio_LDR_ARR_IZQ = promedio_LDR_ARR_IZQ >> 4; //Pasado el bucle for de arriba, tomé 16 valores por cada canal.
-	promedio_LDR_ARR_DER = promedio_LDR_ARR_DER >> 4; //Entonces tengo que dividir por 16 para promediar. Con la operación
-	promedio_LDR_ABJ_IZQ = promedio_LDR_ABJ_IZQ >> 4; //de acá, hago esa divisón; pero esto toma 1 solo ciclo de reloj
-	promedio_LDR_ABJ_DER = promedio_LDR_ABJ_DER >> 4; //a diferencia de la otra división (mucho más rápido)
+	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,ENABLE); //Habilito el canal 6 donde está el LDR de abajo a la derecha
+	ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
+	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_DER_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
+	//vamos de este while
+	valor_LDR_ABJ_DER = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_DER_CH); //Tomo el valor muestreado
+	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
 }
 
 void comparar(void){
 
 	int32_t errorHorizontal = ladoIzquierdo - ladoDerecho; //Calculo los errores de ambos lados
-	int32_t errorVertical = ladoArriba - ladoAbajo;
-	uint8_t movimiento = 0; //Flag para saber si hago sonar el buzzer o no. Empiezo asumiendo que no hay que hacerlo sonar
+	int32_t errorVertical  = ladoArriba - ladoAbajo;
+	//uint8_t movimiento = 0; //Flag para saber si hago sonar el buzzer o no. Empiezo asumiendo que no hay que hacerlo sonar
 
-	if(errorHorizontal > deadZone){moverIzquierda();movimiento = 1;}
+	if(errorHorizontal > (int32_t)deadZone){moverIzquierda();}//movimiento = 1;}
 		//Si la diferencia es lo suficientemente grande, hay que moverse horizontalmente
 		//Si además, la diferencia es muy positiva, nos tenemos que mover hacia la izquierda
 		//Si me tengo que mover, seteo la flag de movimiento en 1
-	else if(errorHorizontal < -deadZone){moverDerecha();movimiento = 1;} //Lo mismo pero hacia la derecha ahora
+	else if(errorHorizontal < -(int32_t)deadZone){moverDerecha();}//;movimiento = 1;} //Lo mismo pero hacia la derecha ahora
 	//Si el error está entre -150 y 150, estoy bastante centrado y no me muevo
 
-	if(errorVertical > deadZone){moverArriba();movimiento = 1;} //Lo mismo de arriba pero para moverse verticalmente
-	else if(errorVertical < -deadZone){moverAbajo();movimiento = 1;}
+	if(errorVertical > (int32_t)deadZone){moverArriba();}//movimiento = 1;} //Lo mismo de arriba pero para moverse verticalmente
+	else if(errorVertical < -(int32_t)deadZone){moverAbajo();}//movimiento = 1;}
 
-	if(movimiento){GPDMA_ChannelCmd(0,ENABLE);} //Si me tengo que mover, habilito el canal para transferir los datos y hacer sonar el buzzer
-	else{GPDMA_ChannelCmd(0,DISABLE);} //Si no hay que moverse, deshabilito el canal y ya el buzzer no suena
+	//if(movimiento){GPDMA_ChannelCmd(0,ENABLE);} //Si me tengo que mover, habilito el canal para transferir los datos y hacer sonar el buzzer
+	//else{GPDMA_ChannelCmd(0,DISABLE);} //Si no hay que moverse, deshabilito el canal y ya el buzzer no suena
 }
 
 void moverIzquierda(void){
+/*
+	posHorizontal -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
+	if(posHorizontal <= SERVO_POS_MIN_PAN){
+		posHorizontal = SERVO_POS_MIN_PAN; //No dejo que el servo se mueva más de lo que permite el eje
+	}*/
+	posHorizontal += paso; //Actualizo siempre el valor restandole esos 10 uSeg
+	if(posHorizontal >= SERVO_POS_MAX_PAN){
+		posHorizontal = SERVO_POS_MAX_PAN; //No dejo que el servo se mueva más de lo que permite el eje
+	}
+	TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,posHorizontal); //Actualizo el valor de match para que cambie el ciclo
+	//de trabajo de la onda que controla este servomotor
+}
 
+void moverDerecha(void){
+/*
+	posHorizontal += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
+	if(posHorizontal >= SERVO_POS_MAX_PAN){
+		posHorizontal = SERVO_POS_MAX_PAN; //No dejo que el servo se mueva más de lo que permite el eje
+	}*/
 	posHorizontal -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posHorizontal <= SERVO_POS_MIN_PAN){
 		posHorizontal = SERVO_POS_MIN_PAN; //No dejo que el servo se mueva más de lo que permite el eje
@@ -306,32 +381,31 @@ void moverIzquierda(void){
 	//de trabajo de la onda que controla este servomotor
 }
 
-void moverDerecha(void){
-
-	posHorizontal += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
-	if(posHorizontal >= SERVO_POS_MAX_PAN){
-		posHorizontal = SERVO_POS_MAX_PAN; //No dejo que el servo se mueva más de lo que permite el eje
-	}
-	TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,posHorizontal); //Actualizo el valor de match para que cambie el ciclo
-	//de trabajo de la onda que controla este servomotor
-}
-
 void moverArriba(void){
 
+	posVertical += paso; //Actualizo siempre el valor restandole esos 10 uSeg
+	if(posVertical >= SERVO_POS_MAX_TILT){
+		posVertical = SERVO_POS_MAX_TILT; //No dejo que el servo se mueva más de lo que permite el eje
+	}/*
 	posVertical -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posVertical <= SERVO_POS_MIN_TILT){
 		posVertical = SERVO_POS_MIN_TILT; //No dejo que el servo se mueva más de lo que permite el eje
-	}
+	}*/
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
 }
 
 void moverAbajo(void){
 
-	posVertical += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
+	posVertical -= paso; //Actualizo siempre el valor sumandole esos 10 uSeg
+	if(posVertical <= SERVO_POS_MIN_TILT){
+		posVertical = SERVO_POS_MIN_TILT; //No dejo que el servo se mueva más de lo que permite el eje
+	}
+	/*
+	posVertical += paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posVertical >= SERVO_POS_MAX_TILT){
 		posVertical = SERVO_POS_MAX_TILT; //No dejo que el servo se mueva más de lo que permite el eje
-	}
+	}*/
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
 }
@@ -368,7 +442,7 @@ void configDMA(void){
 
 	cfgDMA.ChannelNum = 0; //Vamos a usar el canal 0 del DMA para hacer las transferencias
 	cfgDMA.TransferSize = N; //Transfiero siempre 64 muestras
-	//cfgDMA.TransferWidth solamente se usa si la trasnferencia es M2M
+	cfgDMA.TransferWidth=2; //solamente se usa si la trasnferencia es M2M
 	cfgDMA.SrcMemAddr = (uint32_t) ondaSenoidal; //El primer dato siempre viene desde la primera posición del arreglo
 	cfgDMA.DstMemAddr = (uint32_t) &(LPC_DAC -> DACR); //Los datos van siempre hasta el DAC
 	cfgDMA.TransferType = GPDMA_TRANSFERTYPE_M2P; //Las tranferencias siempre son de memoria a periférico
@@ -381,4 +455,65 @@ void configDMA(void){
 	LPC_GPDMACH0 -> DMACCControl &= ~(1 << 31); //Aseguro que las interrupciones por DMA se deshabiliten. No las necesito
 	//No habilito el canal aún para hacer las transferencias de datos. Solamente lo voy a habilitar cuando los servos se
 	//estén moviendo
+	GPDMA_ChannelCmd(0,ENABLE);
+}
+
+void configUART(void){
+
+	UART_CFG_Type cfgUART;
+	UART_ConfigStructInit(&cfgUART); //Cargo la estructura con los valores por defecto (son los que vamos a usar)
+	//9600 baudios, sin bit de paridad, 8 bits de transmisión y recepción, 1 solo bit de stop
+	UART_Init(LPC_UART3,&cfgUART); //Inicializo el módulo UART3 con los valores que cargué en la estructura
+	//Prende el módulo, configura el CCLK a 25 MHz (en este caso). Habilito así la recepción y la transmisión en la placa
+
+	UART_FIFO_CFG_Type cfgFIFO;
+	UART_FIFOConfigStructInit(&cfgFIFO); //Cargo la estructura con valores por defecto
+	//Deshabilita el DMA, habilita los resets en las FIFO's cuando termina de transmitir o recibir y la FIFO se llena con
+	//un solo byte antes de mandar o recibir
+	UART_FIFOConfig(LPC_UART3,&cfgFIFO); //Configuro la función de la FIFO del UART2 según la estructura
+	//Habilito los buffers para que no haya pérdidas de información
+
+	UART_TxCmd(LPC_UART3,ENABLE); //Habilitamos el pin de transimisón por UART
+	UART_IntConfig(LPC_UART3,UART_INTCFG_RBR,ENABLE); //Habilito las interrupciones solo cuando llegue un dato válido
+	NVIC_SetPriority(UART3_IRQn,3); //Menos prioritaria que TIMERS y SysTick
+	NVIC_EnableIRQ(UART3_IRQn); //Habilito interrupciones por UART2
+}
+
+void UART3_IRQHandler(void){
+
+	uint32_t intSrc = UART_GetIntId(LPC_UART3); //Me fijo cuál es la identificación de la interrupción por la que entramos
+
+	if((intSrc & UART_IIR_INTID_MASK) == UART_IIR_INTID_RDA){ //Filtro para asegurar que la interrupción fue por RDA (Recieve Data Avialable)
+		comando = UART_ReceiveByte(LPC_UART3); //Guardo el comando recibido si la interrupción es por RDA
+		flag_nuevoComando = 1; //Habilito la flag para procesar ese comando que llegó
+	}
+}
+
+void procesarComando(void){
+
+	char textoAEnviar[50]; //Para guardar el dato a mandar. 50 caracteres es suficiente para lo que se quiere mandar
+	int cantidadBytes; //Para saber cuántos bytes se van a mandar
+
+	switch(comando){ //Empiezo a ver qué comando llegó
+	case 'P': //Comando de pausa (los servos se quedan donde están)
+		TIM_Cmd(LPC_TIM2,DISABLE); //Deshabilito el timer para que los servos se queden quietos
+		UART_Send(LPC_UART3,(uint8_t *)"MOTORES APAGADOS\r\n",18,BLOCKING); //Puede ser bloqueante porque se manda junto
+		break;
+	case 'R': //Comando para reanudar el movimiento de los servos
+		TIM_Cmd(LPC_TIM2,ENABLE); //Habilito el movimiento otra vez
+		UART_Send(LPC_UART3,(uint8_t *)"MOTORES ENCENDIDOS\r\n",20,BLOCKING); //Lo mismo pero para este comando
+		break;
+	case 'I': //Comando para recibir información de la posición de los motores
+		cantidadBytes = sprintf(textoAEnviar,"Servos -> Pan: %d, Tilt: %d\r\n",posHorizontal,posVertical); //Armo el texto
+		UART_Send(LPC_UART3,(uint8_t *)textoAEnviar,cantidadBytes,BLOCKING); //Mando el texto
+		break;
+	case 'L': //Comando para mover los servos a su posición central
+		TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,SERVO_POS_CENTRO); //Actualizo la posición de los 2 servos
+		TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,SERVO_POS_CENTRO);
+		UART_Send(LPC_UART3,(uint8_t *)"ACOMODANDO SERVOS...\r\n",22,BLOCKING);
+		break;
+	default: //Si llega un comando inválido
+		UART_Send(LPC_UART3,(uint8_t *)"Comando Desconocido. Opciones: P, R, I, L\r\n",43,BLOCKING); //Lo mismo
+		break;
+	}
 }
