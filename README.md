@@ -1,7 +1,9 @@
 # Seguidor Luminico 
 > **Asignatura:** Electrónica Digital [III] - Universidad Nacional de Córdoba
-> **Integrantes:** > * Gutierrez Patricio
-> * Matias Zaambellini
+> **Integrantes:** 
+> * Gutierrez Patricio
+> * Matias Zambellini
+
 > **Profesor:** Marcos Blasco
 
 ---
@@ -30,13 +32,10 @@ Se podria diseñar una pagina web para recolectar datos de telemetria, temperatu
 * **Esquemático del Circuito:** 
 
   `![Esquemático Completo](hardware/esquematico.png)`
-* **Descripción del Circuito y Consideraciones de Diseño:** Breve explicación de las etapas (ej: acoplamiento de señales, protecciones inductivas, filtrado, etc.).
+* **Descripción del Circuito y Consideraciones de Diseño:** parte usando protoboard y partes soldadas
 
 ### 💻 Arquitectura de Software (Firmware)
-* **Diagrama de Flujo o Máquina de Estados:** *[Inserte aquí la imagen del diagrama que explique el lazo principal o el comportamiento del sistema]*
-  `![Diagrama de Flujo / Máquina de Estados](docs/diagrama_software.png)`
 
----
 
 ## ⚡ 3. Especificaciones Eléctricas, Alimentación y Entorno (Específico por Asignatura)
 
@@ -80,12 +79,12 @@ se utilizo una linterna y poca luz para tomar medidas con el tester.
 ---
 
 ## 📂 6. Estructura del Repositorio (Común)
-El repositorio debe mantener obligatoriamente la siguiente estructura limpia (¡Recuerden configurar correctamente el `.gitignore` para no subir carpetas temporales como `Debug/`, `Release/` o archivos `.p1` / `.d`!).
 
 ```text
-├── firmware/          # Código fuente del proyecto (MPLABX / MCUXpresso / STM32Cube)
-│   ├── src/           # Archivos de código (.c)
-│   └── inc/           # Archivos de cabecera (.h)
-├── hardware/          # Archivos de diseño (KiCad/Altium), esquemáticos en PDF/Imagen y BOM
-├── docs/              # Datasheets clave, imágenes del README, notas de aplicación
+└──CMSISv2p00_LPC17xx  #CMSIS
+├── src/        
+│   ├── main.c         # Codigo fuente MCUXpresso
+│  
+├── multimedia/        #  esquemáticos en PDF/Imagen y video
+├── main.c             # Datasheets clave, imágenes del README, notas de aplicación
 └── README.md          # Este archivo de presentación
