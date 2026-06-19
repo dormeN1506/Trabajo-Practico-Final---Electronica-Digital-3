@@ -31,11 +31,11 @@ Se podria diseñar una pagina web para recolectar datos de telemetria, temperatu
 
 * **Esquemático del Circuito:** 
 
-  `![Esquemático Completo](hardware/esquematico.png)`
+
 * **Descripción del Circuito y Consideraciones de Diseño:** parte usando protoboard y partes soldadas
 
 ### 💻 Arquitectura de Software (Firmware)
-![armado fisico hardware](multimedia/Hardware.jpeg)
+
 
 ## ⚡ 3. Especificaciones Eléctricas, Alimentación y Entorno (Específico por Asignatura)
 
@@ -68,14 +68,15 @@ Describan cronológicamente cómo fueron sumando y testeando las diferentes part
 
 ## 📊 5. Ensayos, Pruebas y Resultados (Común)
 Demuestren con datos empíricos que el sistema funciona correctamente. 
-![funcionamiento]C:\Users\Windows 10\OneDrive\Desktop\Trabajo-Practico-Final---Electronica-Digital-3\multimedia\prueba .mp4
+![funcionamiento](multimedia/prueba%20.mp4)
 
 Para hacer que el DAC y DMA funcionen correctamente se realizo la experiencia por separado, haciendo uso de un osciloscopio para ver que la señal sea la correcta.
 se utilizo una linterna y poca luz para tomar medidas con el tester.
 * **Pruebas Funcionales Realizadas:** usamos testeos solo usando dos ldr despues los 4 juntos con la linterna . 
 * **Evidencia Fotográfica y Gráficos:** * 
-  * *Foto del Prototipo Real:* [Insertar foto del hardware final cableado/armado en funcionamiento]
-
+  ![armado fisico hardware](multimedia/Hardware.jpeg)
+![mediciones de osciloscopio 1](multimedia/osciloscopio%201.jpeg)
+![mediciones de osciloscopio 2](multimedia/osciloscopio%202.jpeg)
 ---
 
 ## 📂 6. Estructura del Repositorio (Común)
