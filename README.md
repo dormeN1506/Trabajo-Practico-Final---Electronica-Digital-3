@@ -35,7 +35,7 @@ Se podria diseñar una pagina web para recolectar datos de telemetria, temperatu
 * **Descripción del Circuito y Consideraciones de Diseño:** parte usando protoboard y partes soldadas
 
 ### 💻 Arquitectura de Software (Firmware)
-
+![armado fisico hardware](multimedia/Hardware.jpeg)
 
 ## ⚡ 3. Especificaciones Eléctricas, Alimentación y Entorno (Específico por Asignatura)
 
