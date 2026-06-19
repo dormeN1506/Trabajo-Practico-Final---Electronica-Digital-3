@@ -85,7 +85,7 @@ se utilizo una linterna y poca luz para tomar medidas con el tester.
 └──CMSISv2p00_LPC17xx  #CMSIS
 ├── src/        
 │   ├── main.c         # Codigo fuente MCUXpresso
-│  
+│   ├── DAC_DMA.c        # Codigo funcionamiento DAC DMA
 ├── multimedia/        #  esquemáticos en PDF/Imagen y video
 ├── main.c             # Datasheets clave, imágenes del README, notas de aplicación
 └── README.md          # Este archivo de presentación
