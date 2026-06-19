@@ -68,7 +68,7 @@ Describan cronológicamente cómo fueron sumando y testeando las diferentes part
 
 ## 📊 5. Ensayos, Pruebas y Resultados (Común)
 Demuestren con datos empíricos que el sistema funciona correctamente. 
-![funcionamiento](multimedia/prueba%20.mp4)
+![funcionamiento](multimedia/prueba.gif)
 
 Para hacer que el DAC y DMA funcionen correctamente se realizo la experiencia por separado, haciendo uso de un osciloscopio para ver que la señal sea la correcta.
 se utilizo una linterna y poca luz para tomar medidas con el tester.
