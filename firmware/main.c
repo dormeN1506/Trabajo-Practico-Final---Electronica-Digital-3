@@ -74,7 +74,7 @@
 
 #define N 64 //La LUT va a tener 64 muestras para transferir (64 valores hacen un seno bastante limpio)
 // Tabla de 64 muestras para una onda senoidal en el DAC de 10 bits (con corrimiento de 6 bits)
-/*uint32_t ondaSenoidal[N] = {
+uint32_t ondaSenoidal[N] = {
 		32768, 35968, 39104, 42240, 45248, 48192, 51008, 53632,
 		55872, 58048, 59968, 61696, 63104, 64256, 65088, 65408,
 		65472, 65408, 65088, 64256, 63104, 61696, 59968, 58048,
@@ -83,17 +83,6 @@
 		9664,  7488,  5568,  3840,  2432,  1280,  448,   128,
 		64,    128,   448,   1280,  2432,  3840,  5568,  7488,
 		9664,  11904, 14528, 17344, 20288, 23296, 26432, 29568
-};*/
-
-uint32_t ondaSenoidal[N] = {
-    512,  562,  611,  660,  707,  753,  797,  838,
-    873,  907,  937,  964,  986, 1004, 1017, 1022,
-   1023, 1022, 1017, 1004,  986,  964,  937,  907,
-    873,  838,  797,  753,  707,  660,  611,  562,
-    512,  462,  413,  364,  317,  271,  227,  186,
-    151,  117,   87,   60,   38,   20,    7,    2,
-      1,    2,    7,   20,   38,   60,   87,  117,
-    151,  186,  227,  271,  317,  364,  413,  462
 };
 
 volatile uint32_t valor_LDR_ARR_IZQ = 0;
@@ -127,54 +116,7 @@ void moverIzquierda(void); //Función para ajustar la posición del servo horizo
 void moverDerecha(void); //Función para ajustar la posición del servo horizontal hacia la derecha
 void moverArriba(void); //Función para ajustar la posición del servo vertical hacia arriba
 void moverAbajo(void); //Función para ajustar la posición del servo vertical hacia abajo
-/*void moverIzquierda(int32_t paso); //Función para ajustar la posición del servo horizontal hacia la izquierda
-void moverDerecha(int32_t paso); //Función para ajustar la posición del servo horizontal hacia la derecha
-void moverArriba(int32_t paso); //Función para ajustar la posición del servo vertical hacia arriba
-void moverAbajo(int32_t paso);*/ //Función para ajustar la posición del servo vertical hacia abajo
 void procesarComando(void); //Función para procesar el comando que llegó desde la computadora
-/*
-int main(void) {
-
-    // 1. Inicializamos los pines y el Timer de los servos
-    configPtos();
-    configTimer();
-    configDAC();
-    	configDMA();
-    	GPDMA_ChannelCmd(0,ENABLE);
-
-
-    while(1){
-        // --- POSICIÓN 1: MÍNIMO (0 grados) ---
-        TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, SERVO_POS_MIN_PAN);
-        TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH, SERVO_POS_MIN_TILT);
-
-        // Esperamos un par de segundos para que el motor llegue físicamente
-        for(volatile int i = 0; i < 10000000; i++);
-
-        // --- POSICIÓN 2: CENTRO (90 grados) ---
-        TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, SERVO_POS_CENTRO);
-        TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH, SERVO_POS_CENTRO);
-
-        // Esperamos de nuevo
-        for(volatile int i = 0; i < 10000000; i++);
-
-        // --- POSICIÓN 3: MÁXIMO ---
-        TIM_UpdateMatchValue(LPC_TIM2, SERVO_HORIZ_MAT_CH, SERVO_POS_MAX_PAN);
-        TIM_UpdateMatchValue(LPC_TIM2, SERVO_VERT_MAT_CH, SERVO_POS_MAX_TILT);
-
-        // Esperamos de nuevo
-        for(volatile int i = 0; i < 10000000; i++);
-    }
-
-    return 0 ;
-}
-*/
-
-// --- VARIABLES DE CALIBRACIÓN FIJA ---
-//volatile int32_t offsetarribaizquiera = 956;
-//volatile int32_t offsetarribaderecha = 1092;
-//volatile int32_t offsetabajoizquierda = 1192;
-//volatile int32_t offsetabajoderecha = 0;
 
 int main(void) {
 
@@ -186,74 +128,18 @@ int main(void) {
 	configDMA();
 	configUART();
 
-	// ----------------------------------------------------
-	    // BYPASS DE PRUEBA: Generador de onda cuadrada manual
-	    // ----------------------------------------------------
-	    while(1){
-	        DAC_UpdateValue(LPC_DAC, 1023); // Enciende a 3.3V
-	        for(volatile int i = 0; i < 5000; i++); // Espera
-
-	        DAC_UpdateValue(LPC_DAC, 0);    // Apaga a 0V
-	        for(volatile int i = 0; i < 5000; i++); // Espera
-	    }
-	    // ----------------------------------------------------
-
 	while(1){
-		//DAC_UpdateValue(LPC_DAC, 1023);
 
 		if(convertir){ //Si el flag para convertir está habilitado
 			convertir = 0; //Deshabilito las conversiones hasta que vuelva a pasar el tiempo necesario
 			promediarConversiones();
-
-			//promedio_LDR_ABJ_IZQ += 97;
-			 //   promedio_LDR_ABJ_DER -= 123;
 
 			ladoIzquierdo = valor_LDR_ARR_IZQ + valor_LDR_ABJ_IZQ;
 			ladoDerecho = valor_LDR_ARR_DER + valor_LDR_ABJ_DER;
 			ladoArriba = valor_LDR_ARR_IZQ + valor_LDR_ARR_DER;
 			ladoAbajo = valor_LDR_ABJ_IZQ + valor_LDR_ABJ_DER;
 
-			/*
-			// --- TEST 1: Solo TILT usando lado Izquierdo ---
-            ladoArriba = valor_LDR_ARR_IZQ;
-            ladoAbajo  = valor_LDR_ABJ_IZQ;
-
-            // Anulamos el movimiento horizontal
-            ladoIzquierdo = 0;
-            ladoDerecho   = 0;
-            */
-
-			/*
-			// --- TEST 2: Solo TILT usando lado Derecho ---
-            ladoArriba = valor_LDR_ARR_DER;
-            ladoAbajo  = valor_LDR_ABJ_DER;
-
-            // Anulamos el movimiento horizontal
-            ladoIzquierdo = 0;
-            ladoDerecho   = 0;
-			*/
-/*
-
-			// --- TEST 3: Solo PAN usando fila de Arriba ---
-            ladoIzquierdo = valor_LDR_ARR_IZQ;
-            ladoDerecho   = valor_LDR_ARR_DER;
-
-            // Anulamos el movimiento vertical
-            ladoArriba = 0;
-            ladoAbajo  = 0;
-
-/*
-			// --- TEST 4: Solo PAN usando fila de Abajo ---
-            ladoIzquierdo = valor_LDR_ABJ_IZQ;
-            ladoDerecho   = valor_LDR_ABJ_DER;
-
-            // Anulamos el movimiento vertical
-            ladoArriba = 0;
-            ladoAbajo  = 0;
-
-*/
-
-			comparar(); //Comparlo la luz que recibo de cada lado. El llamado y las actualizaciones tienen que ser acá
+			comparar(); //Comparo la luz que recibo de cada lado. El llamado y las actualizaciones tienen que ser acá
 			//adentro para tener siempre los datos más recientes
 		}
 
@@ -348,21 +234,16 @@ void TIMER2_IRQHandler(void){
 void configADC(void){
 
 	ADC_Init(LPC_ADC,200000); //Habilitamos el módulo, el CLKDIV se setea para tener una frecuencia de muestreo de 200 KHz
-	//ADC_BurstCmd(LPC_ADC,DISABLE); //No queremos que el ADC trabaje en modo burst
-	//No puedo inicializar los canales todos a la vez si quiero empezar conversiones por software. Hay que hacerlo después
-	//porque al habilitar lecturas por software, el módulo se vuelve monotarea y solo puede leer un canal a la vez
-	//Tampoco quiero interrupciones por conversiones, así que no hace falta nada más
 	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,ENABLE);
 	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,ENABLE);
 	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,ENABLE);
 	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,ENABLE);
 	ADC_BurstCmd(LPC_ADC,ENABLE);
-
 }
 
 void configSysTick(void){
 
-	SYSTICK_InternalInit(50); //Inicializo el SysTick para que use el clock interno y genere una interrupción cada 20 mSeg
+	SYSTICK_InternalInit(50); //Inicializo el SysTick para que use el clock interno y genere una interrupción cada 50 mSeg
 	NVIC_SetPriority(SysTick_IRQn,1); //Seteo la prioridad en un poco menos importante que la del timer de los servos
 	SYSTICK_Cmd(ENABLE); //Habilito el contador
 	SYSTICK_IntCmd(ENABLE); //Habilito la interrupción por SysTick
@@ -372,76 +253,6 @@ void SysTick_Handler(void){ //Si entro acá, pasaron 100 mSeg y tengo que habili
 	convertir = 1; //Pongo la flag de conversión en uno
 	//No hace falta limpiar banderas para el SysTick
 }
-/*
-void promediarConversiones(void){
-
-   // volatile uint32_t basura = 0; // Variable para tirar la lectura contaminada
-
-	valor_LDR_ARR_IZQ = 0;
-	valor_LDR_ARR_DER = 0;
-	valor_LDR_ABJ_IZQ = 0;
-	valor_LDR_ABJ_DER = 0;
-
-    // ----------------------------------------------------
-	// --- LDR ARRIBA IZQUIERDA (Canal 0) ---
-	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,ENABLE);
-
-    // 1. LECTURA DE LIMPIEZA
-	ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_IZQ_CH,ADC_DATA_DONE));
-	basura = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_IZQ_CH); // Descartamos esto
-
-    // 2. LECTURA REAL
-    ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_IZQ_CH,ADC_DATA_DONE));
-	valor_LDR_ARR_IZQ = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_IZQ_CH); // Guardamos la real
-	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,DISABLE);
-
-    // ----------------------------------------------------
-	// --- LDR ARRIBA DERECHA (Canal 1) ---
-	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,ENABLE);
-
-    // 1. LECTURA DE LIMPIEZA (El capacitor se vacía del Canal 0)
-	ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_DER_CH,ADC_DATA_DONE));
-	basura = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_DER_CH);
-
-    // 2. LECTURA REAL (Ahora sí tiene el voltaje del Canal 1)
-    ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_DER_CH,ADC_DATA_DONE));
-	valor_LDR_ARR_DER = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_DER_CH);
-	ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,DISABLE);
-
-    // ----------------------------------------------------
-	// --- LDR ABAJO IZQUIERDA (Canal 2) ---
-	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,ENABLE);
-
-    // 1. LECTURA DE LIMPIEZA
-	ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_IZQ_CH,ADC_DATA_DONE));
-	basura = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_IZQ_CH);
-
-    // 2. LECTURA REAL
-    ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_IZQ_CH,ADC_DATA_DONE));
-	valor_LDR_ABJ_IZQ = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_IZQ_CH);
-	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,DISABLE);
-
-    // ----------------------------------------------------
-	// --- LDR ABAJO DERECHA (Canal 7) ---
-	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,ENABLE);
-
-    // 1. LECTURA DE LIMPIEZA
-	ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_DER_CH,ADC_DATA_DONE));
-	basura = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_DER_CH);
-
-    // 2. LECTURA REAL
-    ADC_StartCmd(LPC_ADC,ADC_START_NOW);
-	while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_DER_CH,ADC_DATA_DONE));
-	valor_LDR_ABJ_DER = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_DER_CH);
-	ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,DISABLE);
-}*/
 
 void promediarConversiones(void){
 
@@ -451,35 +262,10 @@ void promediarConversiones(void){
 	valor_LDR_ABJ_DER = 0;
 
 
-	//ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,ENABLE); //Habilito el canal 0 donde está el LDR de arriba a la izquierda
-	//ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-	//while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_IZQ_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-	//vamos de este while
 	valor_LDR_ARR_IZQ = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_IZQ_CH); //Tomo el valor muestreado
-	//ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_IZQ_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
-
-	//ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,ENABLE); //Habilito el canal 1 donde está el LDR de arriba a la derecha
-	//ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-	//while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ARRIBA_DER_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-	//vamos de este while
 	valor_LDR_ARR_DER = ADC_ChannelGetData(LPC_ADC,LDR_ARRIBA_DER_CH); //Tomo el valor muestreado
-	//ADC_ChannelCmd(LPC_ADC,LDR_ARRIBA_DER_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
-
-
-	//ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,ENABLE); //Habilito el canal 2 donde está el LDR de abajo a la izquierda
-	//ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-	//while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_IZQ_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-	//vamos de este while
 	valor_LDR_ABJ_IZQ = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_IZQ_CH); //Tomo el valor muestreado
-	//ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_IZQ_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
-
-	//ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,ENABLE); //Habilito el canal 6 donde está el LDR de abajo a la derecha
-	//ADC_StartCmd(LPC_ADC,ADC_START_NOW); //Iniciamos la conversión en el canal habilitado ahora
-	//while(!ADC_ChannelGetStatus(LPC_ADC,LDR_ABAJO_DER_CH,ADC_DATA_DONE)); //Mientras la conversión no termine, no nos
-	//vamos de este while
 	valor_LDR_ABJ_DER = ADC_ChannelGetData(LPC_ADC,LDR_ABAJO_DER_CH); //Tomo el valor muestreado
-	//ADC_ChannelCmd(LPC_ADC,LDR_ABAJO_DER_CH,DISABLE); //Deshabilito el canal para pasar al que sigue
-
 }
 
 void comparar(void){
@@ -487,41 +273,24 @@ void comparar(void){
 
 	int32_t errorHorizontal = ladoIzquierdo - ladoDerecho; //Calculo los errores de ambos lados
 	int32_t errorVertical  = ladoArriba - ladoAbajo;
-	//uint8_t movimiento = 0; //Flag para saber si hago sonar el buzzer o no. Empiezo asumiendo que no hay que hacerlo sonar
-	/*
-	int32_t pasoDinamicoH = abs(errorHorizontal)/10; //Pasos proporcionales
-	if(pasoDinamicoH > 80) pasoDinamicoH = 80;
-	if(pasoDinamicoH < 15) pasoDinamicoH = 15;
-	int32_t pasoDinamicoV = abs(errorVertical)/10;
-	if(pasoDinamicoV > 80) pasoDinamicoV = 80;
-	if(pasoDinamicoV < 15) pasoDinamicoV = 15;
-
-	if(errorHorizontal > (int32_t)deadZone) moverIzquierda(pasoDinamicoH);
-	if(errorHorizontal < -(int32_t)deadZone) moverDerecha(pasoDinamicoH);
-	if(errorVertical > (int32_t)deadZone) moverArriba(pasoDinamicoV);
-	if(errorVertical < -(int32_t)deadZone) moverAbajo(pasoDinamicoV);*/
-
-	if(errorHorizontal > (int32_t)deadZone){moverIzquierda();}//movimiento = 1;}
+	uint8_t movimiento = 0; //Flag para saber si hago sonar el buzzer o no. Empiezo asumiendo que no hay que hacerlo sonar
+	
+	if(errorHorizontal > (int32_t)deadZone){moverIzquierda(); movimiento = 1;}
 		//Si la diferencia es lo suficientemente grande, hay que moverse horizontalmente
 		//Si además, la diferencia es muy positiva, nos tenemos que mover hacia la izquierda
 		//Si me tengo que mover, seteo la flag de movimiento en 1
-	else if(errorHorizontal < -(int32_t)deadZone){moverDerecha();}//;movimiento = 1;} //Lo mismo pero hacia la derecha ahora
+	else if(errorHorizontal < -(int32_t)deadZone){moverDerecha(); movimiento = 1;} //Lo mismo pero hacia la derecha ahora
 	//Si el error está entre -150 y 150, estoy bastante centrado y no me muevo
 
-	if(errorVertical > (int32_t)deadZone){moverArriba();}//movimiento = 1;} //Lo mismo de arriba pero para moverse verticalmente
-	else if(errorVertical < -(int32_t)deadZone){moverAbajo();}//movimiento = 1;}
+	if(errorVertical > (int32_t)deadZone){moverArriba(); movimiento = 1;} //Lo mismo de arriba pero para moverse verticalmente
+	else if(errorVertical < -(int32_t)deadZone){moverAbajo();movimiento = 1;}
 
-	//if(movimiento) GPDMA_ChannelCmd(0,ENABLE); //Si me tengo que mover, habilito el canal para transferir los datos y hacer sonar el buzzer
-	//else GPDMA_ChannelCmd(0,DISABLE); //Si no hay que moverse, deshabilito el canal y ya el buzzer no suena
+	if(movimiento) GPDMA_ChannelCmd(7,ENABLE); //Si me tengo que mover, habilito el canal para transferir los datos y hacer sonar el buzzer
+	else GPDMA_ChannelCmd(7,DISABLE); //Si no hay que moverse, deshabilito el canal y ya el buzzer no suena
 }
-//void moverIzquierda(int32_t pasoH){
+
 void moverIzquierda(void){
 
-	/*posHorizontal -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
-	if(posHorizontal <= SERVO_POS_MIN_PAN){
-		posHorizontal = SERVO_POS_MIN_PAN; //No dejo que el servo se mueva más de lo que permite el eje
-	}*/
-	//posHorizontal += pasoH;
 	posHorizontal += paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posHorizontal >= SERVO_POS_MAX_PAN){
 		posHorizontal = SERVO_POS_MAX_PAN; //No dejo que el servo se mueva más de lo que permite el eje
@@ -529,14 +298,9 @@ void moverIzquierda(void){
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,posHorizontal); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
 }
-//void moverDerecha(int32_t pasoH){
+
 void moverDerecha(void){
 
-	/*posHorizontal += paso; //Actualizo siempre el valor sumandole esos 10 uSeg
-	if(posHorizontal >= SERVO_POS_MAX_PAN){
-		posHorizontal = SERVO_POS_MAX_PAN; //No dejo que el servo se mueva más de lo que permite el eje
-	}*/
-	//pasoHorizontal -= pasoH;
 	posHorizontal -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posHorizontal <= SERVO_POS_MIN_PAN){
 		posHorizontal = SERVO_POS_MIN_PAN; //No dejo que el servo se mueva más de lo que permite el eje
@@ -544,32 +308,23 @@ void moverDerecha(void){
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,posHorizontal); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
 }
-//void moverArriba(int32_t pasoV){
+
 void moverArriba(void){
-	//posVertical += pasoV;
+	
 	posVertical += paso; //Actualizo siempre el valor restandole esos 10 uSeg
 	if(posVertical >= SERVO_POS_MAX_TILT){
 		posVertical = SERVO_POS_MAX_TILT; //No dejo que el servo se mueva más de lo que permite el eje
-	}/*
-	posVertical -= paso; //Actualizo siempre el valor restandole esos 10 uSeg
-	if(posVertical <= SERVO_POS_MIN_TILT){
-		posVertical = SERVO_POS_MIN_TILT; //No dejo que el servo se mueva más de lo que permite el eje
-	}*/
+	}
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
 }
-//void moverAbajo(int32_t pasoV){
+
 void moverAbajo(void){
 	//posVertical -= pasoV;
 	posVertical -= paso; //Actualizo siempre el valor sumandole esos 10 uSeg
 	if(posVertical <= SERVO_POS_MIN_TILT){
 		posVertical = SERVO_POS_MIN_TILT; //No dejo que el servo se mueva más de lo que permite el eje
 	}
-	/*
-	posVertical += paso; //Actualizo siempre el valor restandole esos 10 uSeg
-	if(posVertical >= SERVO_POS_MAX_TILT){
-		posVertical = SERVO_POS_MAX_TILT; //No dejo que el servo se mueva más de lo que permite el eje
-	}*/
 	TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,posVertical); //Actualizo el valor de match para que cambie el ciclo
 	//de trabajo de la onda que controla este servomotor
 }
@@ -585,28 +340,29 @@ void configDAC(void){
 	DAC_Init(LPC_DAC); //Inicializo el módulo DAC con PCLK = 25 MHz y modo alto consumo y rapidez
 	DAC_SetBias(LPC_DAC,DAC_MAX_CURRENT_350uA); //Voy a sacar la onda a 1 KHz. Como el modo bajo consumo soporta hasta
 	//400 KHz, estoy sobradísimo. Y no consumo tanto (350 uA)
-	DAC_SetDMATimeOut(LPC_DAC,195); //Sabiendo que el DAC cuenta "ticks" a 25 MHz y quiero la onda con frecuencia 1 KHz,
+	DAC_SetDMATimeOut(LPC_DAC,391); //Sabiendo que el DAC cuenta "ticks" a 25 MHz y quiero la onda con frecuencia 1 KHz,
 	//quiero 1000 ondas por segundo (sabiendo que la onda está "partida" en 64 valores). Entonces -> 1000 ondas/segundo*64 valores = 64000 pedidos por segundo
 	//Entonces tiene que contar X ticks para pedir un dato nuevo -> Ticks(PCLK)/Transferencias = 25MHz/64000 = 390.625 y redondeo
 	DAC_ConfigDAConverterControl(LPC_DAC,&cfgDAC); //Configuro el control del DAC con los campos que determiné
 }
-/*
+
 void configDMA(void){
 
+	GPDMA_Init(); //Inicializo el módulo DMA
 	static GPDMA_LLI_Type LLI; //La transferencia va a ser cíclica. Se transfiere la onda cada vez que se necesite siempre
 	GPDMA_Channel_CFG_Type cfgDMA;
 
 	LLI.SrcAddr = (uint32_t) ondaSenoidal; //Los datos siempre vienen del arreglo (el nombre del arreglo ya es un puntero a su primera posición)
 	LLI.DstAddr = (uint32_t) &(LPC_DAC -> DACR); //Los datos siempre van al DAC
 	LLI.NextLLI = (uint32_t) &LLI; //Es una transferencia cíclica. Siempre se manda lo mismo
-	LLI.Control = ((N << 0) | (1 << 18) | (1 << 21) | (1 << 25) | (1 << 26));
+	LLI.Control = ((N << 0) | (2 << 18) | (2 << 21) | (1 << 26));
 	LLI.Control &= ~((1 << 27) | (1 << 31)); //Transfiero siempre 64 muestras; el tamaño de los datos de origen y llegada
 	//es siempre de 32 bits; habilito el incremento automático de dirección de origen; deshabilito el de dirección
 	//de destino; y deshabilito las interrupciones por DMA (no las necesito)
 
-	cfgDMA.ChannelNum = 0; //Vamos a usar el canal 0 del DMA para hacer las transferencias
+	cfgDMA.ChannelNum = 7; //Vamos a usar el canal 7 del DMA para hacer las transferencias
 	cfgDMA.TransferSize = N; //Transfiero siempre 64 muestras
-	cfgDMA.TransferWidth=GPDMA_WIDTH_HALFWORD; //solamente se usa si la trasnferencia es M2M
+	cfgDMA.TransferWidth = 0; //solamente se usa si la trasnferencia es M2M
 	cfgDMA.SrcMemAddr = (uint32_t) ondaSenoidal; //El primer dato siempre viene desde la primera posición del arreglo
 	cfgDMA.DstMemAddr = (uint32_t) &(LPC_DAC -> DACR); //Los datos van siempre hasta el DAC
 	cfgDMA.TransferType = GPDMA_TRANSFERTYPE_M2P; //Las tranferencias siempre son de memoria a periférico
@@ -614,46 +370,8 @@ void configDMA(void){
 	cfgDMA.DstConn = GPDMA_CONN_DAC; //El DAC es el que "pide" que le manden un dato
 	cfgDMA.DMALLI = (uint32_t) &LLI; //La referencia la primera vez que entro acá es la misma LLI que transfiero
 
-	GPDMA_Init(); //Inicializo el módulo DMA
 	GPDMA_Setup(&cfgDMA); //Configuro según los campos de la estructura
-	//LPC_GPDMACH0 -> DMACCControl |= (1 << 25);
-	//LPC_GPDMACH0 -> DMACCControl &= ~(1 << 31); //Aseguro que las interrupciones por DMA se deshabiliten. No las necesito
-	LPC_GPDMACH0 -> DMACCControl = LLI.Control;
-	//No habilito el canal aún para hacer las transferencias de datos. Solamente lo voy a habilitar cuando los servos se
-	//estén moviendo
-	GPDMA_ChannelCmd(0,ENABLE);
-}*/
-void configDMA(void) {
-
-	GPDMA_Init();
-    static GPDMA_LLI_Type LLI;
-    GPDMA_Channel_CFG_Type cfgDMA;
-
-    // 1. Configuración de la lista de enlace (LLI) para transferencia cíclica
-    LLI.SrcAddr = (uint32_t) ondaSenoidal;
-    LLI.DstAddr = (uint32_t) &(LPC_DAC->DACR);
-    LLI.NextLLI = (uint32_t) &LLI; // Apunta a sí mismo para ser infinito
-
-    // Control: N muestras, Ancho transferencia 16 bits (1 << 18),
-    // Incrementar origen, no destino, sin interrupciones.
-    LLI.Control = ((N << 0) | (2 << 18) | (2 << 21) | (1 << 26));
-    LLI.Control &= ~(1 << 27);
-
-    // 2. Configuración del canal DMA
-    cfgDMA.ChannelNum = 0;
-    cfgDMA.SrcMemAddr = (uint32_t) ondaSenoidal;
-    cfgDMA.DstMemAddr = (uint32_t) &(LPC_DAC -> DACR);
-    cfgDMA.TransferSize = N;
-    cfgDMA.TransferWidth = 0; // 16 bits es lo correcto para el registro DACR
-    cfgDMA.TransferType = GPDMA_TRANSFERTYPE_M2P; // Memoria a Periférico
-    cfgDMA.SrcConn = 0;
-    cfgDMA.DstConn = GPDMA_CONN_DAC; // El DAC es quien pide los datos
-    cfgDMA.DMALLI = (uint32_t) &LLI;
-
-    GPDMA_Setup(&cfgDMA);
-
-    // IMPORTANTE: Habilitamos el canal
-    GPDMA_ChannelCmd(0, ENABLE);
+	LPC_GPDMACH0 -> DMACCControl &= ~(1 << 31); //Aseguro que las interrupciones por DMA se deshabiliten. No las necesito
 }
 
 void configUART(void){
@@ -701,28 +419,12 @@ void procesarComando(void){
 		TIM_Cmd(LPC_TIM2,ENABLE); //Habilito el movimiento otra vez
 		UART_Send(LPC_UART3,(uint8_t *)"MOTORES ENCENDIDOS\r\n",20,BLOCKING); //Lo mismo pero para este comando
 		break;
-		/*
-	case 'I': //Comando para recibir información de la posición de los motores
-		cantidadBytes = sprintf(textoAEnviar,"Servos -> Pan: %d, Tilt: %d\r\n",posHorizontal,posVertical); //Armo el texto
-		UART_Send(LPC_UART3,(uint8_t *)textoAEnviar,cantidadBytes,BLOCKING); //Mando el texto
-		break;*/
-	/*
-	case 'I': // Comando de Información para Calibración
-    // Enviamos los valores calculados de los 4 lados
-    	cantidadBytes = sprintf(textoAEnviar, "ARR:%ld | ABJ:%ld | IZQ:%ld | DER:%ld\r\n",
-                            ladoArriba, ladoAbajo, ladoIzquierdo, ladoDerecho);
-    	UART_Send(LPC_UART3, (uint8_t *)textoAEnviar, cantidadBytes, BLOCKING);
-    	break;
-	*/
-
 	case 'I': // Telemetría de valores individuales de los LDR
-    // Formateamos el texto mostrando la matriz de sensores: Arriba (Izq/Der) y Abajo (Izq/Der)
+    		  // Formato del texto: Arriba (Izq/Der) y Abajo (Izq/Der)
     	cantidadBytes = sprintf(textoAEnviar,"INDIVIDUALES %d,%d,%d,%d\r\n", valor_LDR_ARR_IZQ, valor_LDR_ARR_DER,
                             valor_LDR_ABJ_IZQ, valor_LDR_ABJ_DER);
-
-    	UART_Send(LPC_UART3, (uint8_t *)textoAEnviar, cantidadBytes, BLOCKING); 
+		UART_Send(LPC_UART3, (uint8_t *)textoAEnviar, cantidadBytes, BLOCKING); 
     	break;
-
 	case 'L': //Comando para mover los servos a su posición central
 		TIM_UpdateMatchValue(LPC_TIM2,SERVO_HORIZ_MAT_CH,SERVO_POS_CENTRO); //Actualizo la posición de los 2 servos
 		TIM_UpdateMatchValue(LPC_TIM2,SERVO_VERT_MAT_CH,SERVO_POS_CENTRO);

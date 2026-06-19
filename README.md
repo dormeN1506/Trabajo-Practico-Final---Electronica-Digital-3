@@ -30,15 +30,16 @@ El proyecto consiste en un seguidor luminico automatizado de dos ejes, diseñado
 
 ### 🔌 Hardware & Interconexión
 
-* **Esquemático del Circuito:** 
+* **Diagrama de Bloques:** ![Diagrama de Bloques](hardware/Diagrama%20de%20Bloques.JPG)
 
-![Esquemático Completo](hardware/esquematico%20tpfinal.jpeg)
+* **Esquemático del Circuito:**![Esquemático Completo](hardware/esquematico%20tpfinal.jpeg)
 
 * **Descripción del Circuito y Consideraciones de Diseño:** El hardware consta de una etapa lógica centralizada en la MCU LPC1769 (operando a 3.3V) y una etapa de potencia independiente (5V). La lectura de luz se realiza mediante un puente divisor resistivo para adaptar la impedancia de los LDR al ADC. Para el accionamiento de la alarma, se implementó una etapa de potencia mediante un MOSFET 2N7000 (Canal N) actuando como interruptor para manejar la corriente requerida por el buzzer pasivo sin sobrecargar los pines de salida de la MCU. El montaje final es híbrido, combinando protoboard para la lógica temporal y soldadura directa para las pistas de mayor consumo.
 
 ### 💻 Arquitectura de Software (Firmware)
 
-* **Estrategia General:** El sistema se basa en una arquitectura Bare-Metal con un lazo principal (Super-loop) asistido por interrupciones asincrónicas. Se evita el uso de instrucciones bloqueantes en el flujo principal mediante el uso de "flags" (banderas de estado).
+* **Estrategia General:** El sistema se basa en una arquitectura Bare-Metal con un lazo principal (Super-loop) asistido por interrupciones asincrónicas. Se evita el uso de instrucciones bloqueantes en el flujo principal mediante el uso de "flags" (banderas de estado). El sistema no se "queda esperando" en los distintos estados; si no que todas las acciones se llevan a cabo según las flags activas.
+* **Diagrama de Estados:** ![Pseudo Diagrama de Estados](hardware/Diagrama%20de%20Estados.JPG)
 
 ## ⚡ 3. Especificaciones Eléctricas, Alimentación y Entorno
 
