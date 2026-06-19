@@ -68,11 +68,13 @@ Describan cronológicamente cómo fueron sumando y testeando las diferentes part
 ---
 
 ## 📊 5. Ensayos, Pruebas y Resultados (Común)
-Demuestren con datos empíricos que el sistema funciona correctamente. **Es obligatorio incluir registro visual**.
+Demuestren con datos empíricos que el sistema funciona correctamente. 
+![funcionamiento]C:\Users\Windows 10\OneDrive\Desktop\Trabajo-Practico-Final---Electronica-Digital-3\multimedia\prueba .mp4
+
 Para hacer que el DAC y DMA funcionen correctamente se realizo la experiencia por separado, haciendo uso de un osciloscopio para ver que la señal sea la correcta.
 se utilizo una linterna y poca luz para tomar medidas con el tester.
-* **Pruebas Funcionales Realizadas:** Detallen los ensayos (Ej: "Se inyectó una señal controlada para medir la precisión del ADC...").
-* **Evidencia Fotográfica y Gráficos:** * *Capturas de instrumental:* [Insertar capturas de Osciloscopio, Analizador Lógico o Terminal Serie]
+* **Pruebas Funcionales Realizadas:** usamos testeos solo usando dos ldr despues los 4 juntos con la linterna . 
+* **Evidencia Fotográfica y Gráficos:** * 
   * *Foto del Prototipo Real:* [Insertar foto del hardware final cableado/armado en funcionamiento]
 
 ---
