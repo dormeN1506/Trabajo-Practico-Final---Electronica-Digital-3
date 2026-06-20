@@ -90,9 +90,6 @@ void configDAC(void){
 	DAC_Init(LPC_DAC);
 	DAC_SetDMATimeOut(LPC_DAC,391);
 	DAC_ConfigDAConverterControl(LPC_DAC,&cfgDAC);
-	//Sabiendo que el DAC cuenta "ticks" a 25 MHz y quiero la onda con frecuencia 1 KHz,
-	//quiero 1000 ciclos por segundo (sabiendo que la onda está "partida" en 64 valores). Entonces -> 1000 ciclos/segundo*64 valores = 64000 pedidos por segundo
-	//Entonces tiene que contar X ticks para pedir un dato nuevo -> Ticks(PCLK)/Transferencias = 25MHz/64000 = 390.625 y redondeo
 }
 
 void configDMA(void){
