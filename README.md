@@ -1,5 +1,6 @@
 # Seguidor Luminico 
-> **Asignatura:** Electrónica Digital [III] - Universidad Nacional de Córdoba
+> **Asignatura:** Electrónica Digital III - Universidad Nacional de Córdoba
+
 > **Integrantes:** 
 > * Gutierrez, Patricio
 > * Zambellini, Matías Manuel
@@ -47,14 +48,14 @@ El proyecto consiste en un seguidor luminico automatizado de dos ejes, diseñado
 
 * **Tensión de operación del sistema:** 5V DC (Etapa de Potencia: Servos y Buzzer) / 3.3V DC (Etapa Lógica: LPC1769 y sensores LDR).
 * **Método de alimentación:** Alimentación dual mediante bus USB y fuente de tensión continua externa regulada.
-* **Consumo estimado o medido:** * En modo activo (máxima carga, servos en movimiento): ~300 mA a 450 mA.
-* En modo reposo (servos en posición fija manteniendo torque, midiendo sensores): ~70 mA a 100 mA.
+* **Consumo estimado o medido:** En modo activo (máxima carga, servos en movimiento): ~300 mA a 450 mA.
+En modo reposo (servos en posición fija manteniendo torque, midiendo sensores): ~70 mA a 100 mA.
 
 * **IDE y SDK:**  MCUXpresso IDE v25.6.136.
 * **Microcontrolador Principal:**  NXP LPC1769.
 * **Bibliotecas de Terceros y Versiones:** Drivers nativos CMSIS provistos por la cátedra.
 * **Periféricos Avanzados Utilizados:** NVIC, GPDMA, SysTick, DAC, TIMERS (Match/PWM), UART y ADC.
-* **Estrategia de Concurrencia:** Arquitectura Bare-metal con máquina de estados cooperativa basada en flags. Las tareas críticas periódicas (muestreo del ADC) son agendadas por la interrupción de temporización del SysTick_Handler, mientras que los eventos externos (recepción de caracteres de comando) son atendidos de forma asíncrona mediante la interrupción UART3_IRQHandler por Rx Data Available (RDA). El procesador evalúa estas banderas en el loop principal para derivar la ejecución.
+* **Estrategia de Concurrencia:** Arquitectura Bare-metal con máquina de estados cooperativa basada en flags. Las tareas críticas periódicas (muestreo del ADC) son agendadas por la interrupción de temporización del `SysTick_Handler`, mientras que los eventos externos (recepción de caracteres de comando) son atendidos de forma asíncrona mediante la interrupción `UART3_IRQHandler` por Rx Data Available (RDA). El procesador evalúa estas banderas en el loop principal para derivar la ejecución.
 
 ---
 
